@@ -192,19 +192,3 @@ def decrypt_image(eth_private_key_hex, encrypted_symmetric_key_b64, encrypted_im
     # Save the decrypted image back to a file
     with open(output_decrypted_image_path, 'wb') as decrypted_image_file:
         decrypted_image_file.write(decrypted_image_data)
-
-# # Example usage
-# eth_address = "0x845Dd1869DB1a3915345e49d8286AA47eE78FDd1"
-# etherscan_api_key = "WST2SSM3GANQSY9538B87M845XSZPHG9Q5"
-# chain = "SEP"
-# image_path = "original_image.png"
-# INFURA_URL_TESTNET = "https://sepolia.infura.io/v3/12c418a774064ad2b3f241c4dd932dee"
-# image_file = "original_image.png"
-
-# # Read the image as binary data
-# with open(image_path, 'rb') as image_file:
-#     image_data_bytes = image_file.read()
-
-# symmetric_key_hash = encrypt_image_with_eth_address(eth_address, etherscan_api_key, chain, image_data_bytes, INFURA_URL_TESTNET)
-# symmetric_key_hash = "BGYnHvNZQAlJbRXfo3I8YDqBonAVs9gNBvYJ3qEeZrc+BFYjTSTghJLYc0A0imETb82U0lqrXs3vGqPoCRxlhqcApsm75VDMllRM5jTjFYjPZkCLOBEVAUyKdZz6iAklNDPVPdCupMgVG5DWGLJcMAvlg8qkenSKUG8uRHG++vm7av71n89Uiv4gZKBs"
-# decrypt_image(os.environ.get('PRIVATE_KEY'), symmetric_key_hash, "encrypted_image.enc")
