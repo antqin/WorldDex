@@ -23,7 +23,7 @@ load_dotenv()
 
 app = FastAPI()
 
-ITEMS_PER_PAGE = 10  # Define how many items you want per page
+ITEMS_PER_PAGE = 1000  # Define how many items you want per page
 
 # Set your NFT.storage API key in environment variable
 nft_storage_api_key = os.environ.get('NFT_STORAGE_API_KEY')
@@ -185,15 +185,22 @@ async def get_user_images(user_id: str):
                 "ipfs_cid": entity.get('IPFSCid', ''),
                 "date_added": entity.get('DateAdded', ''),
                 "location_taken": entity.get('LocationTaken', ''),
-                "cropped_image_blob_url": entity.get('CroppedImageBlobURL', ''),
+                "cropped_image": "",
                 "image": "",  # Placeholder for base64 encoded image
                 "details": entity.get('Details', ''),
                 "probability": entity.get('Probability', ''),
             }
 
             # Fetch and encode the image from the Blob URL
-            blob_url = entity.get('CroppedImageBlobURL')
-            container_name, blob_name = url_to_blob(blob_url)  # Assuming you have this function defined
+            cropped_blob_url = entity.get('CroppedImageBlobURL')
+            container_name, blob_name = url_to_blob(cropped_blob_url)  # Assuming you have this function defined
+            blob_client = blob_service_client.get_blob_client(container=container_name, blob=blob_name)
+            download_stream = blob_client.download_blob()
+            image_bytes = download_stream.readall()
+            image_info['cropped_image'] = base64.b64encode(image_bytes).decode('utf-8')
+            
+            normal_blob_url = entity.get('ImageBlobURL')
+            container_name, blob_name = url_to_blob(normal_blob_url)  # Assuming you have this function defined
             blob_client = blob_service_client.get_blob_client(container=container_name, blob=blob_name)
             download_stream = blob_client.download_blob()
             image_bytes = download_stream.readall()
@@ -210,12 +217,7 @@ async def get_user_images(user_id: str):
         print(f"Error retrieving data: {e}")
         raise HTTPException(status_code=500, detail="Internal Server Error")
 
-
-      return {"images": result}
-
-    except Exception as e:
-      print(f"Error retrieving data: {e}")
-      raise HTTPException(status_code=500, detail="Internal Server Error")
+    return {"images": result}
 
 
 @app.get("/excludeUserImages")
@@ -242,16 +244,21 @@ async def exclude_user_images(user_id: str, page: int = 1):
                 "user_address": entity.get('UserAddress', ''),
                 "details": entity.get('Details', ''),
                 "probability": entity.get('Probability', ''),
-                "image_blob_url": entity.get('ImageBlobURL', ''),
-                "cropped_image_blob_url": entity.get('CroppedImageBlobURL', ''),
                 "ipfs_cid": entity.get('IPFSCid', ''),
                 "image_classification": entity.get('ImageClassification', ''),
-                "date_taken": entity.get('DateTaken', ''),
+                "date_added": entity.get('DateAdded', ''),
                 "image": "",  # Placeholder for base64 encoded image
               }
               
-              blob_url = entity.get('CroppedImageBlobURL')
-              container_name, blob_name = url_to_blob(blob_url)
+              cropped_blob_url = entity.get('CroppedImageBlobURL')
+              container_name, blob_name = url_to_blob(cropped_blob_url)  # Assuming you have this function defined
+              blob_client = blob_service_client.get_blob_client(container=container_name, blob=blob_name)
+              download_stream = blob_client.download_blob()
+              image_bytes = download_stream.readall()
+              image_info['cropped_image'] = base64.b64encode(image_bytes).decode('utf-8')
+              
+              normal_blob_url = entity.get('ImageBlobURL')
+              container_name, blob_name = url_to_blob(normal_blob_url)  # Assuming you have this function defined
               blob_client = blob_service_client.get_blob_client(container=container_name, blob=blob_name)
               download_stream = blob_client.download_blob()
               image_bytes = download_stream.readall()
