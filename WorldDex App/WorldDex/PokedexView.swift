@@ -44,7 +44,7 @@ struct PokedexView: View {
 
     func fetchPokemon() {
         // Assuming Constants and Endpoints are correctly set up
-        let url = URL(string: Constants.baseURL + Constants.Endpoints.excludeUserImages + "?user_id=\(userId)&page=1")!
+        let url = URL(string: Constants.baseURL + Constants.Endpoints.userImages + "?user_id=\(userId)&page=1")!
 
         URLSession.shared.dataTask(with: url) { data, response, error in
             if let data = data {
