@@ -284,18 +284,11 @@ async def upload(
     probability: str = Form(...),
     image_classification: str = Form(...)
 ):
-    print(f"Length of received base64 string: {len(cropped_image_base64)}")
-    print(f"Length of received base64 string: {len(image_base64)}")
-
     if not await is_valid_username(user_id):
       raise HTTPException(status_code=400, detail="Invalid user ID")
         
     # Convert base64 images back to bytes for decentralized upload
-    print(f"Received Base64 (Start): {image_base64[:30]}")
-    print(f"Received Base64 (End): {image_base64[-30:]}")
-
     cropped_image_content = base64.b64decode(cropped_image_base64)
-    print("SUCCESS LMAO\n")
     decentralized_upload_successful = False
     metadata_cid = None
     metadata_url = ""
