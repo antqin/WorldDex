@@ -189,6 +189,7 @@ async def get_user_images(user_id: str):
                 "image": "",  # Placeholder for base64 encoded image
                 "details": entity.get('Details', ''),
                 "probability": entity.get('Probability', ''),
+                "image_classification": entity.get('ImageClassification', '')
             }
 
             # Fetch and encode the image from the Blob URL
@@ -207,9 +208,6 @@ async def get_user_images(user_id: str):
             image_info['image'] = base64.b64encode(image_bytes).decode('utf-8')
 
             result.append(image_info)
-
-        if not result:
-            return {"message": "No images found for the user"}
 
         return {"images": result}
 
@@ -268,9 +266,6 @@ async def exclude_user_images(user_id: str, page: int = 1):
           elif i >= end_index:
               break
 
-      if not result:
-          return {"message": "No more images found"}
-
       return {"images": result}
 
     except Exception as e:
@@ -281,7 +276,7 @@ async def exclude_user_images(user_id: str, page: int = 1):
 async def upload(
     image_base64: str = Form(...), 
     cropped_image_base64: str = Form(...), 
-    decentralize_storage: Optional[str] = Form(False), 
+    decentralize_storage: Optional[bool] = bool(False), 
     eth_address: Optional[str] = Form(None), 
     user_id: str = Form(...), 
     location_taken: str = Form(...), 
@@ -289,72 +284,69 @@ async def upload(
     probability: str = Form(...),
     image_classification: str = Form(...)
 ):
-    try: 
-      if not await is_valid_username(user_id):
-        raise HTTPException(status_code=400, detail="Invalid user ID")
-          
-      decentralize_storage_bool = decentralize_storage.lower() in ["true", "1", "t", "y", "yes"]
+    print(f"Length of received base64 string: {len(cropped_image_base64)}")
+    print(f"Length of received base64 string: {len(image_base64)}")
 
-      # Convert base64 images back to bytes for decentralized upload
-      cropped_image_content = base64.b64decode(cropped_image_base64)
-      decentralized_upload_successful = False
-      metadata_cid = None
-      metadata_url = ""
-      
-      if decentralize_storage_bool:
-          try:
-            public_key, _ = eth_address_to_pub_key(eth_address, etherscan_api_key, "SEP", web3provider)
-            public_key_hex = public_key.to_hex()
-            encrypted_key, encrypted_image = encrypt_image(cropped_image_content, public_key_hex)
+    if not await is_valid_username(user_id):
+      raise HTTPException(status_code=400, detail="Invalid user ID")
+        
+    # Convert base64 images back to bytes for decentralized upload
+    print(f"Received Base64 (Start): {image_base64[:30]}")
+    print(f"Received Base64 (End): {image_base64[-30:]}")
 
-            # NFT Storage Upload
-            async with AsyncClient() as client:
-                image_cid = await upload_to_nft_storage(client, encrypted_image, image_classification)
+    cropped_image_content = base64.b64decode(cropped_image_base64)
+    print("SUCCESS LMAO\n")
+    decentralized_upload_successful = False
+    metadata_cid = None
+    metadata_url = ""
+    
+    if decentralize_storage:
+      public_key, _ = eth_address_to_pub_key(eth_address, etherscan_api_key, "SEP", web3provider)
+      public_key_hex = public_key.to_hex()
+      encrypted_key, encrypted_image = encrypt_image(cropped_image_content, public_key_hex)
 
-                # Prepare metadata
-                metadata = {
-                    "name": "Encrypted Image",
-                    "description": "An encrypted image with its encrypted symmetric key",
-                    "image": f"ipfs://{image_cid}",
-                    "properties": {"encrypted_key": encrypted_key}
-                }
+      # NFT Storage Upload
+      async with AsyncClient() as client:
+        image_cid = await upload_to_nft_storage(client, encrypted_image, image_classification)
 
-                metadata_cid = await upload_metadata_to_nft_storage(client, metadata, image_cid)
-                metadata_url = f"https://{metadata_cid}.ipfs.nftstorage.link"
-                decentralized_upload_successful = True
+        # Prepare metadata
+        metadata = {
+            "name": "Encrypted Image",
+            "description": "An encrypted image with its encrypted symmetric key",
+            "image": f"ipfs://{image_cid}",
+            "properties": {"encrypted_key": encrypted_key}
+        }
 
-          except Exception as e:
-            print(f"Decentralized Upload failed: {e}")
+        metadata_cid = await upload_metadata_to_nft_storage(client, metadata, image_cid)
+        metadata_url = f"https://{metadata_cid}.ipfs.nftstorage.link"
+        decentralized_upload_successful = True
 
-      # Centralized upload logic
-      try:
-          image_id = get_next_image_id()  # Get a unique image identifier
 
-          # Call to centralized upload function
-          centralized_upload_response = await centralized_upload(
-              image_base64=image_base64,
-              cropped_image_base64=cropped_image_base64,
-              user_id=user_id,
-              image_id=image_id,
-              location_taken=location_taken,
-              user_address=eth_address,
-              details=details,
-              probability=probability,
-              image_classification=image_classification,
-              ipfs_cid=metadata_cid or "N/A"
-          )
-      except Exception as e:
-          raise HTTPException(status_code=500, detail=f"Centralized upload failed: {str(e)}")
+    # Centralized upload logic
+    image_id = get_next_image_id()  # Get a unique image identifier
 
-      return {
-          "decentralized_upload": decentralized_upload_successful,
-          "centralized_upload": centralized_upload_response,
-          "message": "Upload process completed.",
-          "metadata_cid": metadata_cid,
-          "metadata_url": metadata_url
-      }
-    except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+    # Call to centralized upload function
+    centralized_upload_response = await centralized_upload(
+        image_base64=image_base64,
+        cropped_image_base64=cropped_image_base64,
+        user_id=user_id,
+        image_id=image_id,
+        location_taken=location_taken,
+        user_address=eth_address,
+        details=details,
+        probability=probability,
+        image_classification=image_classification,
+        ipfs_cid=metadata_cid or "N/A"
+    )
+        
+    return {
+        "decentralized_upload": decentralized_upload_successful,
+        "centralized_upload": centralized_upload_response,
+        "message": "Upload process completed.",
+        "metadata_cid": metadata_cid,
+        "metadata_url": metadata_url
+    }
+
     
 async def upload_to_nft_storage(client, encrypted_image, image_classification):
     image_response = await client.post(

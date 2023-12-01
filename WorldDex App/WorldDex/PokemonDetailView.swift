@@ -46,7 +46,7 @@ struct PokemonDetailView: View {
     
     var captureText: String {
         let chance = String(pokemon.probability.prefix(4))
-        let item = pokemon.image_id.split(separator: "_").first ?? ""
+        let item = pokemon.image_classification.split(separator: "_").first ?? ""
         return "You had a \(chance)% chance of capturing this \(item)!"
     }
 
@@ -61,7 +61,7 @@ struct PokemonDetailView: View {
                         .scaledToFit()
                         .frame(width: 250, height: 300)
                     
-                    Text(pokemon.image_id.split(separator: "_").first ?? "")
+                    Text(pokemon.image_classification.split(separator: "_").first ?? "")
                         .font(Font.custom("Avenir", size: UIFont.preferredFont(forTextStyle: .largeTitle).pointSize))
                         .foregroundColor(.black)
                         .bold()
@@ -219,7 +219,7 @@ struct PokemonDetailView: View {
     }
     
     func sendTranscriptionToServer(transcription: String) {
-        guard let url = URL(string: Constants.inferenceURL + Constants.inferenceEndpoints.respond) else {
+        guard let url = URL(string: Constants.inferenceURL + Constants.responseEndpoints.respond) else {
             print("Invalid URL")
             return
         }
@@ -230,7 +230,7 @@ struct PokemonDetailView: View {
         
         let requestBody = [
             "text": transcription,
-            "image_name": pokemon.image_id.split(separator: "_").first ?? ""
+            "image_name": pokemon.image_classification.split(separator: "_").first ?? ""
         ] as [String : Any]
         
         do {

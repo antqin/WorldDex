@@ -20,6 +20,7 @@ struct Pokemon: Identifiable, Decodable {
     var cropped_image: String
     var image: String
     let details: String // live observations
+    let image_classification: String
     let probability: String
     
     // Computed property for Identifiable conformance

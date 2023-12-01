@@ -41,7 +41,7 @@ struct PokemonPostView: View {
                 Spacer()
             }
             
-            Text(pokemon.image_id.split(separator: "_").first ?? "")
+            Text(pokemon.image_classification.split(separator: "_").first ?? "")
                 .font(Font.custom("Avenir", size: UIFont.preferredFont(forTextStyle: .title2).pointSize))
                 .foregroundColor(.black)
                 .bold()
@@ -73,7 +73,7 @@ struct PokemonPostView: View {
     var captureText: String {
         let id = pokemon.user_id
         let chance = String(pokemon.probability.prefix(4))
-        let item = pokemon.image_id.split(separator: "_").first ?? ""
+        let item = pokemon.image_classification.split(separator: "_").first ?? ""
         return "\(id) had a \(chance)% chance of capturing this \(item)!"
     }
     
