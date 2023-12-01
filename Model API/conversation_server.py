@@ -1,5 +1,6 @@
 import os
 import openai
+from openai import OpenAI
 import numpy as np
 import json
 import elevenlabs
@@ -16,6 +17,7 @@ set_api_key(os.environ.get("ELEVENLABS_API_KEY"))
 openai.api_key = os.environ.get("GPT4_API_KEY")
 if not openai.api_key:
     raise ValueError("API Key for OpenAI not set!")
+client = OpenAI(api_key=openai.api_key)
 
 app.config['SECRET_KEY'] = os.urandom(24)
 app.config['SESSION_TYPE'] = 'filesystem'
@@ -42,14 +44,14 @@ def _call_openai(messages, function_info=None, max_retries=1, wait_time=1):
         while retries < max_retries:
             try:
                 if functions:
-                    response = openai.ChatCompletion.create(
+                    response = client.chat.completions.create(
                         model="gpt-4",
                         messages=messages,
                         functions=functions,
                         temperature=0
                     )
                 else:
-                    response = openai.ChatCompletion.create(
+                    response = client.chat.completions.create(
                         model="gpt-4",
                         messages=messages,
                         temperature=0

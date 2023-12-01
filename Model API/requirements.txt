@@ -1,0 +1,10 @@
+Flask
+flask-cors
+numpy
+torch
+torchvision
+opencv-python
+openai
+python-dotenv
+Flask-Session
+elevenlabs
