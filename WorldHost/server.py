@@ -1,4 +1,6 @@
 from fastapi import FastAPI, File, UploadFile, HTTPException, Form, status
+from web3 import Web3
+from web3.middleware import geth_poa_middleware
 from typing import Optional
 from cryptography.fernet import Fernet
 import base64
@@ -44,6 +46,26 @@ blob_service_client = BlobServiceClient.from_connection_string(connection_string
 table_service_client = TableServiceClient.from_connection_string(connection_string)
 table_client = table_service_client.get_table_client(table_name="dextablestorage")
 users_table_client = table_service_client.get_table_client(table_name="users")
+
+# Ethereum node connection
+WEB3_PROVIDER_URI = os.getenv("WEB3_PROVIDER")
+web3 = Web3(Web3.HTTPProvider(WEB3_PROVIDER_URI))
+
+# Inject middleware for compatibility with networks like Binance Smart Chain
+web3.middleware_onion.inject(geth_poa_middleware, layer=0)
+
+# Contract details
+CONTRACT_ADDRESS = os.getenv("CONTRACT_ADDRESS")
+
+# Load the ABI from the file
+with open('contract_abi.txt', 'r') as abi_file:
+    CONTRACT_ABI = json.load(abi_file)
+
+contract = web3.eth.contract(address=CONTRACT_ADDRESS, abi=CONTRACT_ABI)
+
+# Wallet details for the transaction sender
+WALLET_PRIVATE_KEY = os.getenv("WALLET_PRIVATE_KEY")
+WALLET_ADDRESS = os.getenv("WALLET_ADDRESS")
 
 @app.get("/userData")
 async def user_data(username: str):
@@ -315,7 +337,10 @@ async def upload(
 
         metadata_cid = await upload_metadata_to_nft_storage(client, metadata, image_cid)
         metadata_url = f"https://{metadata_cid}.ipfs.nftstorage.link"
+            
         decentralized_upload_successful = True
+        if decentralized_upload_successful:
+            mint_response = await mint_nft(metadata_cid, eth_address)
 
 
     # Centralized upload logic
@@ -469,7 +494,38 @@ async def is_valid_username(user_id: str) -> bool:
         print(f"Error checking user validity: {e}")
         return False  # or raise an exception based on your error handling strategy
 
+@app.post("/mint-nft/")
+async def mint_nft(cid: str, user_address: str):
+    # Ensure Ethereum address is valid
+    if not web3.is_address(user_address):
+        raise HTTPException(status_code=400, detail="Invalid Ethereum address")
 
+    # Token URI (IPFS URL)
+    token_uri = f"ipfs://{cid}"
+
+    # Create a transaction
+    nonce = web3.eth.get_transaction_count(WALLET_ADDRESS)
+    # Prepare the transaction
+    txn = contract.functions.mintNFT(user_address, token_uri).build_transaction({
+        'from': WALLET_ADDRESS,  # The address the transaction is sent from
+        'chainId': 11155111,  # Replace with the correct chain ID
+        'gas': 2000000,
+        'gasPrice': web3.to_wei('50', 'gwei'),
+        'nonce': nonce,
+    })
+
+
+    # Sign the transaction
+    signed_txn = web3.eth.account.sign_transaction(txn, private_key=WALLET_PRIVATE_KEY)
+
+    # Send the transaction
+    txn_hash = web3.eth.send_raw_transaction(signed_txn.rawTransaction)
+
+    # # Wait for transaction receipt (optional)
+    # receipt = web3.eth.wait_for_transaction_receipt(txn_hash)
+    print(txn_hash)
+
+    return {"transaction_hash": txn_hash, "status": "NFT Minted"}
 
 if __name__ == "__main__":
     import uvicorn
