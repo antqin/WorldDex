@@ -276,7 +276,7 @@ async def exclude_user_images(user_id: str, page: int = 1):
 async def upload(
     image_base64: str = Form(...), 
     cropped_image_base64: str = Form(...), 
-    decentralize_storage: Optional[bool] = bool(False), 
+    decentralize_storage: Optional[str] = Form("false"), 
     eth_address: Optional[str] = Form(None), 
     user_id: str = Form(...), 
     location_taken: str = Form(...), 
@@ -286,6 +286,8 @@ async def upload(
 ):
     if not await is_valid_username(user_id):
       raise HTTPException(status_code=400, detail="Invalid user ID")
+    
+    decentralize_storage_bool = decentralize_storage.lower() in ["true", "1", "yes"]
         
     # Convert base64 images back to bytes for decentralized upload
     cropped_image_content = base64.b64decode(cropped_image_base64)
@@ -293,7 +295,8 @@ async def upload(
     metadata_cid = None
     metadata_url = ""
     
-    if decentralize_storage:
+    if decentralize_storage_bool:
+      print(f'eth address: {eth_address}\n')
       public_key, _ = eth_address_to_pub_key(eth_address, etherscan_api_key, "SEP", web3provider)
       public_key_hex = public_key.to_hex()
       encrypted_key, encrypted_image = encrypt_image(cropped_image_content, public_key_hex)
