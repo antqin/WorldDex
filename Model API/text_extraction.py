@@ -1,5 +1,6 @@
 from pydoc import tempfilepager
 import openai
+from openai import OpenAI
 import os
 import re
 from dotenv import load_dotenv
@@ -7,6 +8,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 openai.api_key = os.environ.get("OPENAI_API_KEY")
+client = OpenAI(api_key=openai.api_key)
 
 def get_keyphrase_from_gpt(text_prompt):
     extract_prompt = \
@@ -42,14 +44,16 @@ def get_keyphrase_from_gpt(text_prompt):
         Sentence: "{}"
         '''.format(text_prompt)
     
-    response = openai.Completion.create(
+    response = client.completions.create(
         model='gpt-3.5-turbo-instruct', 
-        prompt=extract_prompt,
-        max_tokens=15,
-        temperature=0
+        # max_tokens=15,
+        # temperature=0,
+        prompt=extract_prompt
         )
+    # print(response.choices[0].text)
     
-    keyphrase = response["choices"][0]["text"]
+    # keyphrase = response["choices"][0]["text"]
+    keyphrase = response.choices[0].text
     lines = keyphrase.split('\n')
     keyphrase = next((line for line in lines if line.strip() != ''), "")
     keyphrase = re.sub(r'[^a-zA-Z0-9 ]', '', keyphrase).strip()

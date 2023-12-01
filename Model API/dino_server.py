@@ -23,9 +23,9 @@ from groundingdino.util.inference import load_model, load_image, predict, annota
 import supervision as sv
 
 DENOMINATOR = 1000
-CONFIG_PATH = "groundingdino/config/GroundingDINO_SwinT_OGC.py"
+CONFIG_PATH = "GroundingDINO/groundingdino/config/GroundingDINO_SwinT_OGC.py"
 WEIGHTS_NAME = "groundingdino_swint_ogc.pth"
-WEIGHTS_PATH = "weights/" + WEIGHTS_NAME
+WEIGHTS_PATH = "GroundingDINO/weights/" + WEIGHTS_NAME
 model = load_model(CONFIG_PATH, WEIGHTS_PATH)
 
 CATCH_THRESHOLD = 0.5
