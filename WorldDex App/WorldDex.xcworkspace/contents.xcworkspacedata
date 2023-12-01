@@ -2,6 +2,9 @@
 <Workspace
    version = "1.0">
    <FileRef
+      location = "group:/Users/anthonyqin/Desktop/Calhacks 2023/WorldDex/WorldDex App/WorldDex/GlobalConstants.swift">
+   </FileRef>
+   <FileRef
       location = "group:WorldDex.xcodeproj">
    </FileRef>
    <FileRef
