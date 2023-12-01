@@ -6,7 +6,7 @@
 //
 
 struct Constants {
-    static let baseURL = "http://10.5.102.46:8000"
+    static let baseURL = "https://worlddex.ngrok.app"
     static let inferenceURL = "http://104.42.251.202:5000"
     static let respondURL = ""
     struct Endpoints {
