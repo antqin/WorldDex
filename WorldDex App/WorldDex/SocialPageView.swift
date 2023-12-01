@@ -15,20 +15,21 @@ struct SocialPageView: View {
     @State private var isEmpty: Bool = true
     
     func fetchFriendsPokemon() {
-        // Assuming your API supports excluding by user ID with the 'exclude_user_id' parameter.
-        let url = URL(string: "http://192.168.0.113:3000/excludeUserImages?user_id=\(userId)")!
-        
+        let url = URL(string: Constants.baseURL + Constants.Endpoints.excludeUserImages + "?user_id=\(userId)&page=1")!
+
         URLSession.shared.dataTask(with: url) { data, response, error in
             if let data = data {
                 do {
-                    let fetchedPokemons = try JSONDecoder().decode(ImageResponse.self, from: data)
-                    let sortedPokemons = fetchedPokemons.imagePaths.sorted(by: {
-                        $0.date_added > $1.date_added
-                    })
-                    DispatchQueue.main.async {
-                        self.friendsPokemons = sortedPokemons
-                        self.isLoading = false
-                        self.isEmpty = false
+                    let fetchedData = try JSONDecoder().decode([String: [Pokemon]].self, from: data)
+                    if let fetchedPokemons = fetchedData["images"] {
+                        let sortedPokemons = fetchedPokemons.sorted(by: {
+                            $0.date_added > $1.date_added
+                        })
+                        DispatchQueue.main.async {
+                            self.friendsPokemons = sortedPokemons
+                            self.isLoading = false
+                            self.isEmpty = false
+                        }
                     }
                 } catch {
                     print("Error decoding: \(error)")
@@ -42,6 +43,7 @@ struct SocialPageView: View {
             }
         }.resume()
     }
+
     
     var body: some View {
         ZStack {

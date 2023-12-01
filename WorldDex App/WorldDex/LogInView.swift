@@ -15,7 +15,8 @@ struct LogInView: View {
     @Binding var isLoggedIn: Bool
     @Binding var username: String
     
-    let url = URL(string: "http://192.168.0.113:3000/login")! // TODO: UPDATE TO CORRECT HOST
+    let loginUrl = URL(string: Constants.baseURL + Constants.Endpoints.login)!
+
 
     var body: some View {
         ZStack {
@@ -63,36 +64,43 @@ struct LogInView: View {
     }
 
     func logIn() {
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        let parameters: [String: String] = [
-            "user_id": user_id,
-            "user_password": password
-        ]
-        request.httpBody = try? JSONSerialization.data(withJSONObject: parameters, options: [])
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        var request = URLRequest(url: loginUrl)
+            request.httpMethod = "POST"
 
-        URLSession.shared.dataTask(with: request) { data, response, error in
-            if let httpResponse = response as? HTTPURLResponse {
-                if httpResponse.statusCode == 200 {
-                    print("SUCCESSFUL LOGIN")
-                    DispatchQueue.main.async {
-                        self.isLoggedIn = true
-                        self.username = user_id
-                        UserDefaults.standard.set(true, forKey: "isLoggedIn")
-                        UserDefaults.standard.set(user_id, forKey: "username")
-                        self.showError = false
+            // Prepare form data
+            let formData = "username=\(user_id)&password=\(password)"
+            request.httpBody = formData.data(using: .utf8)
+            
+            // Set the content type to application/x-www-form-urlencoded
+            request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
+
+            URLSession.shared.dataTask(with: request) { data, response, error in
+                if let httpResponse = response as? HTTPURLResponse {
+                    switch httpResponse.statusCode {
+                    case 200:
+                        print("SUCCESSFUL LOGIN")
+                        DispatchQueue.main.async {
+                            self.isLoggedIn = true
+                            self.username = user_id
+                            UserDefaults.standard.set(true, forKey: "isLoggedIn")
+                            UserDefaults.standard.set(user_id, forKey: "username")
+                            self.showError = false
+                        }
+                    case 401:
+                        print("FAIL LOGIN: Invalid username or password")
+                        DispatchQueue.main.async {
+                            self.showError = true
+                        }
+                    default:
+                        print("FAIL LOGIN: Server error")
+                        DispatchQueue.main.async {
+                            self.showError = true
+                        }
                     }
-                } else {
-                    print("FAIL LOGIN")
-                    DispatchQueue.main.async {
-                        self.showError = true
-                    }
+                } else if let error = error {
+                    print("Error fetching data: \(error)")
                 }
-            } else if let error = error {
-                print("Error fetching data: \(error)")
-            }
-        }.resume()
+            }.resume()
     }
 }
 

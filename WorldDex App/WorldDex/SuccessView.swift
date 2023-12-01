@@ -35,7 +35,7 @@ struct SuccessView: View {
     @State private var lastTranscriptionTime = Date()
     @State private var isTextFieldActive = false
     
-    let url = URL(string: "http://192.168.0.113:3000/catch")! // TODO: UPDATE TO CORRECT HOST
+    let uploadUrl = URL(string: Constants.baseURL + Constants.Endpoints.upload)!
 
     var body: some View {
         ZStack {
@@ -93,28 +93,44 @@ struct SuccessView: View {
                     stopRecording()
                     self.isTextFieldActive = false
                     callback?()
-                    let croppedImageData: Data? = croppedImage?.jpegData(compressionQuality: 0.5) // you can adjust the compression quality
+
+                    let croppedImageData: Data? = croppedImage?.jpegData(compressionQuality: 0.5)
                     let croppedImageBase64String: String? = croppedImageData?.base64EncodedString()
-                    let originalImageData: Data? = originalImage?.jpegData(compressionQuality: 0.5) // you can adjust the compression quality
+                    let originalImageData: Data? = originalImage?.jpegData(compressionQuality: 0.5)
                     let originalImageBase64String: String? = originalImageData?.base64EncodedString()
-                    var request = URLRequest(url: url)
+
+                    let uploadUrl = URL(string: Constants.baseURL + Constants.Endpoints.upload)!
+                    var request = URLRequest(url: uploadUrl)
                     request.httpMethod = "POST"
-                    request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-                    let data: [String: Any] = ["image_id": item,
-                                               "userId": userId,
-                                               "details": recordingText,
-                                               "locationTaken": location,
-                                               "imageBase64": originalImageBase64String,
-                                               "croppedImageBase64": croppedImageBase64String,
-                                               "probability" : probability]
-                    let jsonData = try? JSONSerialization.data(withJSONObject: data)
-                    request.httpBody = jsonData
+
+                    // Prepare form data
+                    var components = URLComponents()
+                    components.queryItems = [
+                        URLQueryItem(name: "image_base64", value: originalImageBase64String),
+                        URLQueryItem(name: "cropped_image_base64", value: croppedImageBase64String),
+                        URLQueryItem(name: "user_id", value: userId),
+                        URLQueryItem(name: "location_taken", value: location),
+                        URLQueryItem(name: "details", value: recordingText),
+                        URLQueryItem(name: "probability", value: String(probability)),
+                        URLQueryItem(name: "image_classification", value: item)  // Assuming 'item' is your image classification
+                    ]
+
+                    // Note: Add other fields like 'decentralize_storage', 'eth_address' if necessary
+                    // ...
+
+                    request.httpBody = components.query?.data(using: .utf8)
+                    request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
+
                     URLSession.shared.dataTask(with: request) { (data, response, error) in
                         // Handle response here
-                        if let error = error {
+                        if let httpResponse = response as? HTTPURLResponse {
+                            if httpResponse.statusCode == 201 {
+                                print("Upload successful")
+                            } else {
+                                print("Upload failed with status: \(httpResponse.statusCode)")
+                            }
+                        } else if let error = error {
                             print("Error: \(error)")
-                        } else if let data = data {
-                            print(data)
                         }
                     }.resume()
                 }

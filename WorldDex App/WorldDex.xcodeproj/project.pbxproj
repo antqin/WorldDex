@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		48EE501E83FB1001C988C72B /* Pods_WorldDex.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 4BC245294000090D47167693 /* Pods_WorldDex.framework */; };
+		957486B42B190CA900112673 /* Constants.swift in Sources */ = {isa = PBXBuildFile; fileRef = 957486B32B190CA900112673 /* Constants.swift */; };
 		BB0313BB2AEC7DBA005D3715 /* WorldDexApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0313BA2AEC7DBA005D3715 /* WorldDexApp.swift */; };
 		BB0313BD2AEC7DBA005D3715 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0313BC2AEC7DBA005D3715 /* ContentView.swift */; };
 		BB0313BF2AEC7DBC005D3715 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = BB0313BE2AEC7DBC005D3715 /* Assets.xcassets */; };
@@ -42,6 +43,7 @@
 /* Begin PBXFileReference section */
 		21B1D0D2F612648857C68EC0 /* Pods-WorldDex.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-WorldDex.release.xcconfig"; path = "Target Support Files/Pods-WorldDex/Pods-WorldDex.release.xcconfig"; sourceTree = "<group>"; };
 		4BC245294000090D47167693 /* Pods_WorldDex.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_WorldDex.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		957486B32B190CA900112673 /* Constants.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Constants.swift; sourceTree = "<group>"; };
 		BB0313B72AEC7DBA005D3715 /* WorldDex.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = WorldDex.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		BB0313BA2AEC7DBA005D3715 /* WorldDexApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorldDexApp.swift; sourceTree = "<group>"; };
 		BB0313BC2AEC7DBA005D3715 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
@@ -63,7 +65,7 @@
 		BB0313EA2AECDB33005D3715 /* MicProgressBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MicProgressBar.swift; sourceTree = "<group>"; };
 		BB0313F62AECF6FB005D3715 /* diceroll.gif */ = {isa = PBXFileReference; lastKnownFileType = image.gif; path = diceroll.gif; sourceTree = "<group>"; };
 		BB0313F82AECFA82005D3715 /* SuccessView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SuccessView.swift; sourceTree = "<group>"; };
-		BB0313FC2AED0BCF005D3715 /* FailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = FailView.swift; path = "/Users/anthonyqin/Desktop/Calhacks 2023/WorldDex/WorldDex App/WorldDex/FailView.swift"; sourceTree = "<absolute>"; };
+		BB0313FC2AED0BCF005D3715 /* FailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FailView.swift; sourceTree = "<group>"; };
 		BB0313FE2AED0BF7005D3715 /* UITextViewWrapper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UITextViewWrapper.swift; sourceTree = "<group>"; };
 		BB15A5AA2AEDBB35009182AC /* CameraData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraData.swift; sourceTree = "<group>"; };
 		BB15A5AE2AEDF36F009182AC /* Launch Screen.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = "Launch Screen.storyboard"; sourceTree = "<group>"; };
@@ -147,6 +149,7 @@
 				BB0313F62AECF6FB005D3715 /* diceroll.gif */,
 				BB0313BE2AEC7DBC005D3715 /* Assets.xcassets */,
 				BB0313C02AEC7DBC005D3715 /* Preview Content */,
+				957486B32B190CA900112673 /* Constants.swift */,
 			);
 			path = WorldDex;
 			sourceTree = "<group>";
@@ -295,6 +298,7 @@
 				BB0313FD2AED0BCF005D3715 /* FailView.swift in Sources */,
 				BB0313BB2AEC7DBA005D3715 /* WorldDexApp.swift in Sources */,
 				BB0313FF2AED0BF7005D3715 /* UITextViewWrapper.swift in Sources */,
+				957486B42B190CA900112673 /* Constants.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -431,7 +435,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "\"WorldDex/Preview Content\"";
-				DEVELOPMENT_TEAM = 69G7HE4MM9;
+				DEVELOPMENT_TEAM = 5L2TJ5BA64;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = WorldDex/Info.plist;
@@ -472,7 +476,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "\"WorldDex/Preview Content\"";
-				DEVELOPMENT_TEAM = 69G7HE4MM9;
+				DEVELOPMENT_TEAM = 5L2TJ5BA64;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = WorldDex/Info.plist;

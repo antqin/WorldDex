@@ -12,9 +12,7 @@ struct UserDataView: View {
     @Binding var isLoggedIn: Bool
     @State private var email: String = ""
     
-    var url: URL {
-        return URL(string: "http://192.168.0.113:3000/userData?user_id=\(username)")! // TODO: UPDATE TO CORRECT IP
-    }
+    let userDataUrl = URL(string: Constants.baseURL + Constants.Endpoints.userData)!
     
     var body: some View {
         ZStack {
@@ -48,18 +46,21 @@ struct UserDataView: View {
     }
     
     func fetchUserData() {
-        URLSession.shared.dataTask(with: url) { data, response, error in
+        let userDataUrl = URL(string: Constants.baseURL + Constants.Endpoints.userData + "?username=\(username)")!
+
+        URLSession.shared.dataTask(with: userDataUrl) { data, response, error in
             guard let data = data else {
-                print("Error fetching data: \(error!)")
+                print("Error fetching data: \(String(describing: error))")
                 return
             }
 
             do {
                 if let jsonResponse = try JSONSerialization.jsonObject(with: data, options: []) as? [String: Any] {
-                    if let userEmail = jsonResponse["email"] as? String {
-                        DispatchQueue.main.async {
+                    DispatchQueue.main.async {
+                        if let userEmail = jsonResponse["email"] as? String {
                             self.email = userEmail
                         }
+                        // NOTE: insert a property to store ethereum address
                     }
                 }
             } catch {
@@ -67,6 +68,7 @@ struct UserDataView: View {
             }
         }.resume()
     }
+
     
     func logOut() {
         UserDefaults.standard.set(false, forKey: "isLoggedIn")

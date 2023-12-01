@@ -43,19 +43,23 @@ struct PokedexView: View {
     var userId: String = UserDefaults.standard.string(forKey: "username") ?? ""
 
     func fetchPokemon() {
-        let url = URL(string:"http://192.168.0.113:3000/images?user_id=\(userId)")!
+        // Assuming Constants and Endpoints are correctly set up
+        let url = URL(string: Constants.baseURL + Constants.Endpoints.excludeUserImages + "?user_id=\(userId)&page=1")!
 
         URLSession.shared.dataTask(with: url) { data, response, error in
             if let data = data {
                 do {
-                    let fetchedPokemons = try JSONDecoder().decode(ImageResponse.self, from: data)
-                    let sortedPokemons = fetchedPokemons.imagePaths.sorted(by: {
-                        $0.date_added > $1.date_added
-                    })
-                    DispatchQueue.main.async {
-                        self.pokemonList = sortedPokemons
-                        self.isEmpty = false
-                        self.isLoading = false
+                    let fetchedData = try JSONDecoder().decode([String: [Pokemon]].self, from: data)
+                    if let fetchedPokemons = fetchedData["images"] {
+                        let sortedPokemons = fetchedPokemons.sorted(by: {
+                            // Assuming `date_taken` is in a suitable format for comparison
+                            $0.date_added > $1.date_added
+                        })
+                        DispatchQueue.main.async {
+                            self.pokemonList = sortedPokemons
+                            self.isEmpty = false
+                            self.isLoading = false
+                        }
                     }
                 } catch {
                     print("Error decoding: \(error)")
@@ -69,6 +73,7 @@ struct PokedexView: View {
             }
         }.resume()
     }
+
 
     var body: some View {
         ZStack {

@@ -1,4 +1,4 @@
-from fastapi import FastAPI, File, UploadFile, HTTPException, Form
+from fastapi import FastAPI, File, UploadFile, HTTPException, Form, status
 from typing import Optional
 from cryptography.fernet import Fernet
 import base64
@@ -14,8 +14,12 @@ import threading
 from typing import List
 from urllib.parse import urlparse
 import hashlib
+from dotenv import load_dotenv
+import datetime
 
 lock = threading.Lock()
+
+load_dotenv()
 
 app = FastAPI()
 
@@ -41,14 +45,40 @@ table_service_client = TableServiceClient.from_connection_string(connection_stri
 table_client = table_service_client.get_table_client(table_name="dextablestorage")
 users_table_client = table_service_client.get_table_client(table_name="users")
 
+@app.get("/userData")
+async def user_data(username: str):
+    try:
+        # Query for the specific user
+        filter_query = f"PartitionKey eq '{username}' and RowKey eq 'userinfo'"
+        user_entities = list(users_table_client.query_entities(filter_query))
+
+        if not user_entities:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        user_entity = user_entities[0]
+
+        # Assuming 'Email' and 'EthereumAddress' are the field names in your table
+        email = user_entity.get('Email', 'No email provided')
+        ethereum_address = user_entity.get('EthereumAddress', 'No Ethereum address provided')
+
+        return {"email": email, "ethereum_address": ethereum_address}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.post("/registerUser")
-async def register_user(username: str, password: str, ethereum_address: str = None):
+async def register_user(username: str, password: str, email: str, ethereum_address: str = None):
     try:
         # Check if username already exists
-        filter_query = f"PartitionKey eq '{username}'"
-        existing_users = list(users_table_client.query_entities(filter_query))
-        if existing_users:
+        username_query = f"PartitionKey eq '{username}'"
+        existing_users_by_username = list(users_table_client.query_entities(username_query))
+        if existing_users_by_username:
             raise HTTPException(status_code=400, detail="Username already exists")
+
+        # Check if email already exists
+        email_query = f"Email eq '{email}'"
+        existing_users_by_email = list(users_table_client.query_entities(email_query))
+        if existing_users_by_email:
+            raise HTTPException(status_code=400, detail="Email already exists")
 
         # Hash the password
         hashed_password = hash_password(password)
@@ -58,6 +88,7 @@ async def register_user(username: str, password: str, ethereum_address: str = No
         user_entity['PartitionKey'] = username
         user_entity['RowKey'] = 'userinfo'  # Or some other suitable row key
         user_entity['Password'] = hashed_password
+        user_entity['Email'] = email
         user_entity['EthereumAddress'] = ethereum_address
 
         # Add to table
@@ -66,6 +97,7 @@ async def register_user(username: str, password: str, ethereum_address: str = No
         return {"message": "User registered successfully"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
       
 @app.post("/login")
 async def login(username: str = Form(...), password: str = Form(...)):
@@ -75,16 +107,20 @@ async def login(username: str = Form(...), password: str = Form(...)):
         user_entities = list(users_table_client.query_entities(filter_query))
 
         if not user_entities:
-            return {"status": "error", "message": "Invalid username or password"}
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, 
+                                detail="Invalid username or password")
 
         user_entity = user_entities[0]
         hashed_password = hash_password(password)
 
-        # Verify password
         if user_entity['Password'] == hashed_password:
             return {"status": "success", "message": "Login successful"}
         else:
-            return {"status": "error", "message": "Invalid username or password"}
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, 
+                                detail="Invalid username or password")
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, 
+                            detail=str(e))
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -136,27 +172,44 @@ async def get_image(image_id: str):
 @app.get("/getUserImages")
 async def get_user_images(user_id: str):
     try:
-      # Query to retrieve images belonging to user_id
-      filter_query = f"PartitionKey eq '{user_id}'"
-      queried_entities = table_client.query_entities(filter_query)
+        # Query to retrieve images belonging to user_id
+        filter_query = f"PartitionKey eq '{user_id}'"
+        queried_entities = table_client.query_entities(filter_query)
 
-      # Fetching Images
-      result = []
-      for entity in queried_entities:
-          blob_url = entity.get('ImageBlobURL')
-          container_name, blob_name = url_to_blob(blob_url)  # Assuming you have this function defined
-          blob_client = blob_service_client.get_blob_client(container=container_name, blob=blob_name)
-          download_stream = blob_client.download_blob()
-          image_bytes = download_stream.readall()
-          base64_encoded_image = base64.b64encode(image_bytes).decode('utf-8')
+        # Fetching Images
+        result = []
+        for entity in queried_entities:
+            image_info = {
+                "image_id": entity['RowKey'],
+                "user_id": entity['PartitionKey'],
+                "ipfs_cid": entity.get('IPFSCid', ''),
+                "date_added": entity.get('DateAdded', ''),
+                "location_taken": entity.get('LocationTaken', ''),
+                "cropped_image_blob_url": entity.get('CroppedImageBlobURL', ''),
+                "image": "",  # Placeholder for base64 encoded image
+                "details": entity.get('Details', ''),
+                "probability": entity.get('Probability', ''),
+            }
 
-          # Add the base64 encoded image to the result
-          entity_with_image = entity.copy()
-          entity_with_image['Base64Image'] = base64_encoded_image
-          result.append(entity_with_image)
+            # Fetch and encode the image from the Blob URL
+            blob_url = entity.get('CroppedImageBlobURL')
+            container_name, blob_name = url_to_blob(blob_url)  # Assuming you have this function defined
+            blob_client = blob_service_client.get_blob_client(container=container_name, blob=blob_name)
+            download_stream = blob_client.download_blob()
+            image_bytes = download_stream.readall()
+            image_info['image'] = base64.b64encode(image_bytes).decode('utf-8')
 
-      if not result:
-          return {"message": "No images found for the user"}
+            result.append(image_info)
+
+        if not result:
+            return {"message": "No images found for the user"}
+
+        return {"images": result}
+
+    except Exception as e:
+        print(f"Error retrieving data: {e}")
+        raise HTTPException(status_code=500, detail="Internal Server Error")
+
 
       return {"images": result}
 
@@ -167,7 +220,7 @@ async def get_user_images(user_id: str):
 
 @app.get("/excludeUserImages")
 async def exclude_user_images(user_id: str, page: int = 1):
-    # try:
+    try:
       # Calculate the range of items for the requested page
       start_index = (page - 1) * ITEMS_PER_PAGE
       end_index = start_index + ITEMS_PER_PAGE
@@ -182,18 +235,29 @@ async def exclude_user_images(user_id: str, page: int = 1):
       for i, entity in enumerate(queried_entities):
           if start_index <= i < end_index:
               # Fetch and encode the image
-              blob_url = entity.get('ImageBlobURL')
-              print(f'blob_url: {blob_url}\n')
+              image_info = {
+                "image_id": entity['RowKey'],
+                "user_id": entity['PartitionKey'],
+                "location_taken": entity.get('LocationTaken', ''),
+                "user_address": entity.get('UserAddress', ''),
+                "details": entity.get('Details', ''),
+                "probability": entity.get('Probability', ''),
+                "image_blob_url": entity.get('ImageBlobURL', ''),
+                "cropped_image_blob_url": entity.get('CroppedImageBlobURL', ''),
+                "ipfs_cid": entity.get('IPFSCid', ''),
+                "image_classification": entity.get('ImageClassification', ''),
+                "date_taken": entity.get('DateTaken', ''),
+                "image": "",  # Placeholder for base64 encoded image
+              }
+              
+              blob_url = entity.get('CroppedImageBlobURL')
               container_name, blob_name = url_to_blob(blob_url)
               blob_client = blob_service_client.get_blob_client(container=container_name, blob=blob_name)
               download_stream = blob_client.download_blob()
               image_bytes = download_stream.readall()
-              base64_encoded_image = base64.b64encode(image_bytes).decode('utf-8')
-                
-              # Add the base64 encoded image to the result
-              entity_with_image = entity.copy()
-              entity_with_image['Base64Image'] = base64_encoded_image
-              result.append(entity_with_image)
+              image_info['image'] = base64.b64encode(image_bytes).decode('utf-8')
+
+              result.append(image_info)
           elif i >= end_index:
               break
 
@@ -202,11 +266,11 @@ async def exclude_user_images(user_id: str, page: int = 1):
 
       return {"images": result}
 
-    # except Exception as e:
-    #     print(f"Error retrieving data: {e}")
-    #     raise HTTPException(status_code=500, detail="Internal Server Error")
+    except Exception as e:
+        print(f"Error retrieving data: {e}")
+        raise HTTPException(status_code=500, detail="Internal Server Error")
 
-@app.post("/upload/")
+@app.post("/upload")
 async def upload(
     image_base64: str = Form(...), 
     cropped_image_base64: str = Form(...), 
@@ -218,70 +282,72 @@ async def upload(
     probability: str = Form(...),
     image_classification: str = Form(...)
 ):
-  
-    if not await is_valid_username(user_id):
-      raise HTTPException(status_code=400, detail="Invalid user ID")
-        
-    decentralize_storage_bool = decentralize_storage.lower() in ["true", "1", "t", "y", "yes"]
+    try: 
+      if not await is_valid_username(user_id):
+        raise HTTPException(status_code=400, detail="Invalid user ID")
+          
+      decentralize_storage_bool = decentralize_storage.lower() in ["true", "1", "t", "y", "yes"]
 
-    # Convert base64 images back to bytes for decentralized upload
-    cropped_image_content = base64.b64decode(cropped_image_base64)
-    decentralized_upload_successful = False
-    metadata_cid = None
-    metadata_url = ""
-    
-    if decentralize_storage_bool:
-        try:
-          public_key, _ = eth_address_to_pub_key(eth_address, etherscan_api_key, "SEP", web3provider)
-          public_key_hex = public_key.to_hex()
-          encrypted_key, encrypted_image = encrypt_image(cropped_image_content, public_key_hex)
+      # Convert base64 images back to bytes for decentralized upload
+      cropped_image_content = base64.b64decode(cropped_image_base64)
+      decentralized_upload_successful = False
+      metadata_cid = None
+      metadata_url = ""
+      
+      if decentralize_storage_bool:
+          try:
+            public_key, _ = eth_address_to_pub_key(eth_address, etherscan_api_key, "SEP", web3provider)
+            public_key_hex = public_key.to_hex()
+            encrypted_key, encrypted_image = encrypt_image(cropped_image_content, public_key_hex)
 
-          # NFT Storage Upload
-          async with AsyncClient() as client:
-              image_cid = await upload_to_nft_storage(client, encrypted_image, image_classification)
+            # NFT Storage Upload
+            async with AsyncClient() as client:
+                image_cid = await upload_to_nft_storage(client, encrypted_image, image_classification)
 
-              # Prepare metadata
-              metadata = {
-                  "name": "Encrypted Image",
-                  "description": "An encrypted image with its encrypted symmetric key",
-                  "image": f"ipfs://{image_cid}",
-                  "properties": {"encrypted_key": encrypted_key}
-              }
+                # Prepare metadata
+                metadata = {
+                    "name": "Encrypted Image",
+                    "description": "An encrypted image with its encrypted symmetric key",
+                    "image": f"ipfs://{image_cid}",
+                    "properties": {"encrypted_key": encrypted_key}
+                }
 
-              metadata_cid = await upload_metadata_to_nft_storage(client, metadata, image_cid)
-              metadata_url = f"https://{metadata_cid}.ipfs.nftstorage.link"
-              decentralized_upload_successful = True
+                metadata_cid = await upload_metadata_to_nft_storage(client, metadata, image_cid)
+                metadata_url = f"https://{metadata_cid}.ipfs.nftstorage.link"
+                decentralized_upload_successful = True
 
-        except Exception as e:
-          print(f"Decentralized Upload failed: {e}")
+          except Exception as e:
+            print(f"Decentralized Upload failed: {e}")
 
-     # Centralized upload logic
-    try:
-        image_id = get_next_image_id()  # Get a unique image identifier
+      # Centralized upload logic
+      try:
+          image_id = get_next_image_id()  # Get a unique image identifier
 
-        # Call to centralized upload function
-        centralized_upload_response = await centralized_upload(
-            image_base64=image_base64,
-            cropped_image_base64=cropped_image_base64,
-            user_id=user_id,
-            image_id=image_id,
-            location_taken=location_taken,
-            user_address=eth_address,
-            details=details,
-            probability=probability,
-            image_classification=image_classification,
-            ipfs_cid=metadata_cid or "N/A"
-        )
+          # Call to centralized upload function
+          centralized_upload_response = await centralized_upload(
+              image_base64=image_base64,
+              cropped_image_base64=cropped_image_base64,
+              user_id=user_id,
+              image_id=image_id,
+              location_taken=location_taken,
+              user_address=eth_address,
+              details=details,
+              probability=probability,
+              image_classification=image_classification,
+              ipfs_cid=metadata_cid or "N/A"
+          )
+      except Exception as e:
+          raise HTTPException(status_code=500, detail=f"Centralized upload failed: {str(e)}")
+
+      return {
+          "decentralized_upload": decentralized_upload_successful,
+          "centralized_upload": centralized_upload_response,
+          "message": "Upload process completed.",
+          "metadata_cid": metadata_cid,
+          "metadata_url": metadata_url
+      }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Centralized upload failed: {str(e)}")
-
-    return {
-        "decentralized_upload": decentralized_upload_successful,
-        "centralized_upload": centralized_upload_response,
-        "message": "Upload process completed.",
-        "metadata_cid": metadata_cid,
-        "metadata_url": metadata_url
-    }
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
     
 async def upload_to_nft_storage(client, encrypted_image, image_classification):
     image_response = await client.post(
@@ -385,6 +451,7 @@ def create_table_entry(user_id, image_id, location_taken, user_address, details,
     entity['CroppedImageBlobURL'] = cropped_image_blob_url
     entity['IPFSCid'] = ipfs_cid
     entity['ImageClassification'] = image_classification
+    entity['DateAdded'] = datetime.datetime.now().isoformat()
     table_client.create_entity(entity)
     
 def url_to_blob(blob_url):

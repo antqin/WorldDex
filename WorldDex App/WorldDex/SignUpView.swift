@@ -14,7 +14,7 @@ struct SignUpView: View {
     @Binding var isLoggedIn: Bool
     @Binding var username: String
     
-    let url = URL(string: "http://192.168.0.113:3000/signup")! // TODO: UPDATE TO CORRECT HOST
+    let signUpUrl = URL(string: Constants.baseURL + Constants.Endpoints.register)!
 
     var body: some View {
         ZStack {
@@ -68,24 +68,41 @@ struct SignUpView: View {
     }
 
     func signUp() {
-        var request = URLRequest(url: url)
+        // Encode the parameters in the query string
+        let queryItems = [
+            URLQueryItem(name: "username", value: user_id),
+            URLQueryItem(name: "password", value: password),
+            URLQueryItem(name: "ethereum_address", value: ""), // Example value
+            URLQueryItem(name: "email", value: email)
+        ]
+        var urlComponents = URLComponents(string: Constants.baseURL + Constants.Endpoints.register)!
+        urlComponents.queryItems = queryItems
+
+        guard let signUpUrl = urlComponents.url else {
+            print("Invalid URL")
+            return
+        }
+
+        var request = URLRequest(url: signUpUrl)
         request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        let data: [String: Any] = ["user_id": user_id,
-                                   "email": email,
-                                   "user_password": password]
-        let jsonData = try? JSONSerialization.data(withJSONObject: data)
-        request.httpBody = jsonData
+        
+        // No need to set a JSON body or content-type header for query parameters
         URLSession.shared.dataTask(with: request) { (data, response, error) in
             // Handle response here
             if let error = error {
                 print("Error: \(error)")
-            } else if let data = data {
-                self.isLoggedIn = true
-                self.username = user_id
-                UserDefaults.standard.set(true, forKey: "isLoggedIn")
-                UserDefaults.standard.set(user_id, forKey: "username")
-                print(data)
+            } else if let httpResponse = response as? HTTPURLResponse {
+                if httpResponse.statusCode == 200 {
+                    DispatchQueue.main.async {
+                        self.isLoggedIn = true
+                        self.username = user_id
+                        UserDefaults.standard.set(true, forKey: "isLoggedIn")
+                        UserDefaults.standard.set(user_id, forKey: "username")
+                    }
+                } else {
+                    // Handle other status codes or show an error message
+                    print("Error: HTTP Status Code \(httpResponse.statusCode)")
+                }
             }
         }.resume()
     }

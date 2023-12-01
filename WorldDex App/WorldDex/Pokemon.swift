@@ -14,7 +14,7 @@ struct ImageResponse: Decodable {
 struct Pokemon: Identifiable, Decodable {
     let image_id: String // ITEM_ID
     let user_id: String
-    let blockchain_url: String
+    let ipfs_cid: String
     let date_added: String // TIME
     let location_taken: String
     var cropped_image: String
