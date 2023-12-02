@@ -61,14 +61,22 @@ struct PokemonPostView: View {
     }
     
     var formattedDate: String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss.SSSZ"
-        if let date = formatter.date(from: pokemon.date_added) {
-            formatter.dateFormat = "MM/dd/yyyy hh:mm:ss a"
-            return formatter.string(from: date)
+        let inputFormatter = DateFormatter()
+        inputFormatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss.SSSSSS" // Updated to match your timestamp format
+        inputFormatter.locale = Locale(identifier: "en_US_POSIX") // Added to handle locale-specific behaviors
+
+        let outputFormatter = DateFormatter()
+        outputFormatter.dateFormat = "MM/dd/yyyy hh:mm:ss a"
+        outputFormatter.amSymbol = "AM" // Explicitly set AM symbol
+        outputFormatter.pmSymbol = "PM" // Explicitly set PM symbol
+        outputFormatter.locale = Locale(identifier: "en_US_POSIX") // Ensure consistent 12-hour format
+
+        if let date = inputFormatter.date(from: pokemon.date_added) {
+            return outputFormatter.string(from: date)
         }
         return pokemon.date_added
     }
+
     
     var captureText: String {
         let id = pokemon.user_id
