@@ -161,36 +161,6 @@ async def get_all_usernames():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-
-@app.get("/getSpecificImage")
-async def get_image(image_id: str):
-    # try:
-        # Query the table to find the entity with the given row_key
-        filter_query = f"RowKey eq '{image_id}'"
-        entities = list(table_client.query_entities(filter_query))
-
-        if not entities:
-            raise HTTPException(status_code=404, detail="Image not found")
-
-        # Assuming the first matching entity contains the image URL
-        blob_url = entities[0].get('ImageBlobURL')
-
-        # Create a blob client using the blob's URL
-        container_name, blob_name = url_to_blob(blob_url)  # Assuming you have this function defined
-        blob_client = blob_service_client.get_blob_client(container=container_name, blob=blob_name)
-
-        # Download the blob contents
-        download_stream = blob_client.download_blob()
-        image_bytes = download_stream.readall()
-
-        # Convert bytes to base64 encoded string
-        base64_encoded = base64.b64encode(image_bytes).decode('utf-8')
-
-        return {"image_data": base64_encoded}
-    # except Exception as e:
-    #     raise HTTPException(status_code=500, detail=f"Error retrieving image: {str(e)}")
-
-
 @app.get("/getUserImages")
 async def get_user_images(user_id: str):
     try:
@@ -213,6 +183,8 @@ async def get_user_images(user_id: str):
                 "probability": entity.get('Probability', ''),
                 "image_classification": entity.get('ImageClassification', '')
             }
+            
+            image_info['probability'] = str(image_info['probability'])
 
             # Fetch and encode the image from the Blob URL
             cropped_blob_url = entity.get('CroppedImageBlobURL')
@@ -270,6 +242,8 @@ async def exclude_user_images(user_id: str, page: int = 1):
                 "image": "",  # Placeholder for base64 encoded image
               }
               
+              image_info['probability'] = str(image_info['probability'])
+              
               cropped_blob_url = entity.get('CroppedImageBlobURL')
               container_name, blob_name = url_to_blob(cropped_blob_url)  # Assuming you have this function defined
               blob_client = blob_service_client.get_blob_client(container=container_name, blob=blob_name)
@@ -302,7 +276,7 @@ async def upload(
     eth_address: Optional[str] = Form(None), 
     user_id: str = Form(...), 
     location_taken: str = Form(...), 
-    details: str = Form(...), 
+    details: Optional[str] = Form(...), 
     probability: str = Form(...),
     image_classification: str = Form(...)
 ):
@@ -529,4 +503,4 @@ async def mint_nft(cid: str, user_address: str):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run("server:app", host="0.0.0.0", port=8000)

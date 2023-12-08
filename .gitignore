@@ -1,5 +1,36 @@
-**/.DS_Store
-*.db
+# macOS files
+.DS_Store
+
+# Xcode files
+xcuserdata/
+*.xccheckout
+WorldDex App/WorldDex.xcodeproj/xcuserdata/
+WorldDex App/WorldDex.xcodeproj/xcshareddata/
+WorldDex App/WorldDex.xcworkspace/xcuserdata/
+WorldDex App/WorldDex.xcworkspace/xcshareddata/
+
+# CocoaPods
+WorldDex App/Pods/
+
+# Python files
 *.py[cod]
-.web
 __pycache__/
+*.db
+
+# Other files
+*.web
+
+# Derived data (for Xcode projects)
+DerivedData/
+
+# Swift PM
+.swiftpm/xcode/package.xcworkspace/xcuserdata/
+
+# Other common ignore patterns
+build/
+*.moved-aside
+*.swp
+*~
+.*.swp
+*.bak
+
