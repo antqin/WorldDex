@@ -103,23 +103,35 @@ struct SuccessView: View {
                     var request = URLRequest(url: uploadUrl)
                     request.httpMethod = "POST"
 
-                    // Prepare form data
-                    var components = URLComponents()
-                    components.queryItems = [
-                        URLQueryItem(name: "image_base64", value: originalImageBase64String),
-                        URLQueryItem(name: "cropped_image_base64", value: croppedImageBase64String),
-                        URLQueryItem(name: "user_id", value: userId),
-                        URLQueryItem(name: "location_taken", value: location),
-                        URLQueryItem(name: "details", value: recordingText),
-                        URLQueryItem(name: "probability", value: String(probability)),
-                        URLQueryItem(name: "image_classification", value: item)  // Assuming 'item' is your image classification
+                    // Create the boundary for the multipart request
+                    let boundary = "Boundary-\(UUID().uuidString)"
+                    request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+
+                    var body = Data()
+
+                    // Append each field to the body
+                    let formFields: [String: String?] = [
+                        "image_base64": originalImageBase64String,
+                        "cropped_image_base64": croppedImageBase64String,
+                        "user_id": userId,
+                        "location_taken": location,
+                        "details": recordingText,
+                        "probability": String(probability),
+                        "image_classification": item  // Assuming 'item' is your image classification
+                        // Add other fields like 'decentralize_storage', 'eth_address' if necessary
                     ]
 
-                    // Note: Add other fields like 'decentralize_storage', 'eth_address' if necessary
-                    // ...
+                    for (key, value) in formFields {
+                        if let value = value {
+                            body.append("--\(boundary)\r\n")
+                            body.append("Content-Disposition: form-data; name=\"\(key)\"\r\n\r\n")
+                            body.append("\(value)\r\n")
+                        }
+                    }
 
-                    request.httpBody = components.query?.data(using: .utf8)
-                    request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
+                    body.append("--\(boundary)--\r\n")
+
+                    request.httpBody = body
 
                     URLSession.shared.dataTask(with: request) { (data, response, error) in
                         // Handle response here

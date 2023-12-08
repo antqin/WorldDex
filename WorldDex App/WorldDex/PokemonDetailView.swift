@@ -27,6 +27,7 @@ struct PokemonDetailView: View {
     @State private var finalTranscription: String?
     
     // Audio Playback
+    @State private var isLoading: Bool = false // Track loading state for audio
     @State private var audioPlayer: AVAudioPlayer?
     @State private var isPlaying = false
     
@@ -46,7 +47,7 @@ struct PokemonDetailView: View {
     
     var captureText: String {
         let chance = String(pokemon.probability.prefix(4))
-        let item = pokemon.image_id.split(separator: "_").first ?? ""
+        let item = pokemon.image_classification.split(separator: "_").first ?? ""
         return "You had a \(chance)% chance of capturing this \(item)!"
     }
 
@@ -61,7 +62,7 @@ struct PokemonDetailView: View {
                         .scaledToFit()
                         .frame(width: 250, height: 300)
                     
-                    Text(pokemon.image_id.split(separator: "_").first ?? "")
+                    Text(pokemon.image_classification.split(separator: "_").first ?? "")
                         .font(Font.custom("Avenir", size: UIFont.preferredFont(forTextStyle: .largeTitle).pointSize))
                         .foregroundColor(.black)
                         .bold()
@@ -96,43 +97,49 @@ struct PokemonDetailView: View {
                         }
                     }
                     .foregroundColor(.black)
-
-                    if isPlaying {
-                        Circle()
-                            .fill(isFlashing ? Color.orange : Color.gray)
+                    
+                    if isLoading {
+                        GifImageView(gifName: "loading", desiredWidth: 50, desiredHeight: 50)
                             .frame(width: 50, height: 50)
-                            .animation(.default)
-                            .onAppear {
-                                audioPlayerDelegate.stopPlayingCallback = {
-                                    stopPlaying()
-                                }
-                            }
                     } else {
-                        Button(action: {}, label: {
-                            Image(systemName: "mic.fill")
-                                .resizable()
-                                .frame(width: 40, height: 60)
-                                .colorMultiply(isPressed ? Color.gray : Color.white) // Highlight effect
-                                .onLongPressGesture(minimumDuration: .infinity, pressing: { isPressing in
-                                    self.isPressed = isPressing
-                                    if isPressing {
-                                        DispatchQueue.main.async {
-                                            // Haptic feedback
-                                            let generator = UIImpactFeedbackGenerator(style: .medium)
-                                            generator.impactOccurred()
-                                        }
-                                        startRecording()
-                                    } else {
-                                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-                                            stopRecording()
-                                        }
+                        if isPlaying {
+                            Circle()
+                                .fill(isFlashing ? Color.orange : Color.gray)
+                                .frame(width: 50, height: 50)
+                                .animation(.default)
+                                .onAppear {
+                                    audioPlayerDelegate.stopPlayingCallback = {
+                                        stopPlaying()
                                     }
-                                }, perform: {})
-                        })
-                        Text("Press and hold to talk to AI")
-                            .font(Font.custom("Avenir", size: 20))
-                            .foregroundColor(Color("theme2"))
-                        .padding(.bottom, 10)
+                                }
+                        } else {
+                            Button(action: {}, label: {
+                                Image(systemName: "mic.fill")
+                                    .resizable()
+                                    .frame(width: 40, height: 60)
+                                    .colorMultiply(isPressed ? Color.gray : Color.white) // Highlight effect
+                                    .onLongPressGesture(minimumDuration: .infinity, pressing: { isPressing in
+                                        self.isPressed = isPressing
+                                        if isPressing {
+                                            DispatchQueue.main.async {
+                                                // Haptic feedback
+                                                let generator = UIImpactFeedbackGenerator(style: .medium)
+                                                generator.impactOccurred()
+                                            }
+                                            startRecording()
+                                        } else {
+                                            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                                                stopRecording()
+                                                isLoading = true
+                                            }
+                                        }
+                                    }, perform: {})
+                            })
+                            Text("Press and hold to talk to AI")
+                                .font(Font.custom("Avenir", size: 20))
+                                .foregroundColor(Color("theme2"))
+                                .padding(.bottom, 10)
+                        }
                     }
                 }
                 .offset(y: -geometry.size.height * 0.05)
@@ -142,6 +149,8 @@ struct PokemonDetailView: View {
     
     func startPlaying() {
         audioPlayer?.play()
+        isLoading = false
+        isPlaying = true
         
         audioLevelTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true, block: { _ in
             guard let player = audioPlayer else {
@@ -206,7 +215,7 @@ struct PokemonDetailView: View {
 
     func stopRecording() {
         if audioEngine.isRunning {
-            isPlaying = true
+            isLoading = true
             audioEngine.stop()
             recognitionRequest?.endAudio()
             recognitionTask?.cancel()
@@ -219,7 +228,7 @@ struct PokemonDetailView: View {
     }
     
     func sendTranscriptionToServer(transcription: String) {
-        guard let url = URL(string: Constants.inferenceURL + Constants.inferenceEndpoints.respond) else {
+        guard let url = URL(string: Constants.conversationURL + Constants.responseEndpoints.respond) else {
             print("Invalid URL")
             return
         }
@@ -230,7 +239,7 @@ struct PokemonDetailView: View {
         
         let requestBody = [
             "text": transcription,
-            "image_name": pokemon.image_id.split(separator: "_").first ?? ""
+            "image_name": pokemon.image_classification.split(separator: "_").first ?? ""
         ] as [String : Any]
         
         do {

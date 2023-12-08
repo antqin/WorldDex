@@ -1,0 +1,14 @@
+fastapi
+httpx
+azure-storage-blob
+azure-data-tables
+eciespy
+cryptography
+web3
+requests
+coincurve
+eth-account
+eth-keys
+eth-rlp
+python-dotenv
+json

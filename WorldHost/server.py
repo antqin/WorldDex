@@ -1,4 +1,6 @@
 from fastapi import FastAPI, File, UploadFile, HTTPException, Form, status
+from web3 import Web3
+from web3.middleware import geth_poa_middleware
 from typing import Optional
 from cryptography.fernet import Fernet
 import base64
@@ -44,6 +46,26 @@ blob_service_client = BlobServiceClient.from_connection_string(connection_string
 table_service_client = TableServiceClient.from_connection_string(connection_string)
 table_client = table_service_client.get_table_client(table_name="dextablestorage")
 users_table_client = table_service_client.get_table_client(table_name="users")
+
+# Ethereum node connection
+WEB3_PROVIDER_URI = os.getenv("WEB3_PROVIDER")
+web3 = Web3(Web3.HTTPProvider(WEB3_PROVIDER_URI))
+
+# Inject middleware for compatibility with networks like Binance Smart Chain
+web3.middleware_onion.inject(geth_poa_middleware, layer=0)
+
+# Contract details
+CONTRACT_ADDRESS = os.getenv("CONTRACT_ADDRESS")
+
+# Load the ABI from the file
+with open('contract_abi.txt', 'r') as abi_file:
+    CONTRACT_ABI = json.load(abi_file)
+
+contract = web3.eth.contract(address=CONTRACT_ADDRESS, abi=CONTRACT_ABI)
+
+# Wallet details for the transaction sender
+WALLET_PRIVATE_KEY = os.getenv("WALLET_PRIVATE_KEY")
+WALLET_ADDRESS = os.getenv("WALLET_ADDRESS")
 
 @app.get("/userData")
 async def user_data(username: str):
@@ -189,6 +211,7 @@ async def get_user_images(user_id: str):
                 "image": "",  # Placeholder for base64 encoded image
                 "details": entity.get('Details', ''),
                 "probability": entity.get('Probability', ''),
+                "image_classification": entity.get('ImageClassification', '')
             }
 
             # Fetch and encode the image from the Blob URL
@@ -207,9 +230,6 @@ async def get_user_images(user_id: str):
             image_info['image'] = base64.b64encode(image_bytes).decode('utf-8')
 
             result.append(image_info)
-
-        if not result:
-            return {"message": "No images found for the user"}
 
         return {"images": result}
 
@@ -268,9 +288,6 @@ async def exclude_user_images(user_id: str, page: int = 1):
           elif i >= end_index:
               break
 
-      if not result:
-          return {"message": "No more images found"}
-
       return {"images": result}
 
     except Exception as e:
@@ -281,7 +298,7 @@ async def exclude_user_images(user_id: str, page: int = 1):
 async def upload(
     image_base64: str = Form(...), 
     cropped_image_base64: str = Form(...), 
-    decentralize_storage: Optional[str] = Form(False), 
+    decentralize_storage: Optional[str] = Form("false"), 
     eth_address: Optional[str] = Form(None), 
     user_id: str = Form(...), 
     location_taken: str = Form(...), 
@@ -289,72 +306,68 @@ async def upload(
     probability: str = Form(...),
     image_classification: str = Form(...)
 ):
-    try: 
-      if not await is_valid_username(user_id):
-        raise HTTPException(status_code=400, detail="Invalid user ID")
-          
-      decentralize_storage_bool = decentralize_storage.lower() in ["true", "1", "t", "y", "yes"]
+    if not await is_valid_username(user_id):
+      raise HTTPException(status_code=400, detail="Invalid user ID")
+    
+    decentralize_storage_bool = decentralize_storage.lower() in ["true", "1", "yes"]
+        
+    # Convert base64 images back to bytes for decentralized upload
+    cropped_image_content = base64.b64decode(cropped_image_base64)
+    decentralized_upload_successful = False
+    metadata_cid = None
+    metadata_url = ""
+    
+    if decentralize_storage_bool:
+      print(f'eth address: {eth_address}\n')
+      public_key, _ = eth_address_to_pub_key(eth_address, etherscan_api_key, "SEP", web3provider)
+      public_key_hex = public_key.to_hex()
+      encrypted_key, encrypted_image = encrypt_image(cropped_image_content, public_key_hex)
 
-      # Convert base64 images back to bytes for decentralized upload
-      cropped_image_content = base64.b64decode(cropped_image_base64)
-      decentralized_upload_successful = False
-      metadata_cid = None
-      metadata_url = ""
-      
-      if decentralize_storage_bool:
-          try:
-            public_key, _ = eth_address_to_pub_key(eth_address, etherscan_api_key, "SEP", web3provider)
-            public_key_hex = public_key.to_hex()
-            encrypted_key, encrypted_image = encrypt_image(cropped_image_content, public_key_hex)
+      # NFT Storage Upload
+      async with AsyncClient() as client:
+        image_cid = await upload_to_nft_storage(client, encrypted_image, image_classification)
 
-            # NFT Storage Upload
-            async with AsyncClient() as client:
-                image_cid = await upload_to_nft_storage(client, encrypted_image, image_classification)
+        # Prepare metadata
+        metadata = {
+            "name": "Encrypted Image",
+            "description": "An encrypted image with its encrypted symmetric key",
+            "image": f"ipfs://{image_cid}",
+            "properties": {"encrypted_key": encrypted_key}
+        }
 
-                # Prepare metadata
-                metadata = {
-                    "name": "Encrypted Image",
-                    "description": "An encrypted image with its encrypted symmetric key",
-                    "image": f"ipfs://{image_cid}",
-                    "properties": {"encrypted_key": encrypted_key}
-                }
+        metadata_cid = await upload_metadata_to_nft_storage(client, metadata, image_cid)
+        metadata_url = f"https://{metadata_cid}.ipfs.nftstorage.link"
+            
+        decentralized_upload_successful = True
+        if decentralized_upload_successful:
+            mint_response = await mint_nft(metadata_cid, eth_address)
 
-                metadata_cid = await upload_metadata_to_nft_storage(client, metadata, image_cid)
-                metadata_url = f"https://{metadata_cid}.ipfs.nftstorage.link"
-                decentralized_upload_successful = True
 
-          except Exception as e:
-            print(f"Decentralized Upload failed: {e}")
+    # Centralized upload logic
+    image_id = get_next_image_id()  # Get a unique image identifier
 
-      # Centralized upload logic
-      try:
-          image_id = get_next_image_id()  # Get a unique image identifier
+    # Call to centralized upload function
+    centralized_upload_response = await centralized_upload(
+        image_base64=image_base64,
+        cropped_image_base64=cropped_image_base64,
+        user_id=user_id,
+        image_id=image_id,
+        location_taken=location_taken,
+        user_address=eth_address,
+        details=details,
+        probability=probability,
+        image_classification=image_classification,
+        ipfs_cid=metadata_cid or "N/A"
+    )
+        
+    return {
+        "decentralized_upload": decentralized_upload_successful,
+        "centralized_upload": centralized_upload_response,
+        "message": "Upload process completed.",
+        "metadata_cid": metadata_cid,
+        "metadata_url": metadata_url
+    }
 
-          # Call to centralized upload function
-          centralized_upload_response = await centralized_upload(
-              image_base64=image_base64,
-              cropped_image_base64=cropped_image_base64,
-              user_id=user_id,
-              image_id=image_id,
-              location_taken=location_taken,
-              user_address=eth_address,
-              details=details,
-              probability=probability,
-              image_classification=image_classification,
-              ipfs_cid=metadata_cid or "N/A"
-          )
-      except Exception as e:
-          raise HTTPException(status_code=500, detail=f"Centralized upload failed: {str(e)}")
-
-      return {
-          "decentralized_upload": decentralized_upload_successful,
-          "centralized_upload": centralized_upload_response,
-          "message": "Upload process completed.",
-          "metadata_cid": metadata_cid,
-          "metadata_url": metadata_url
-      }
-    except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
     
 async def upload_to_nft_storage(client, encrypted_image, image_classification):
     image_response = await client.post(
@@ -481,7 +494,38 @@ async def is_valid_username(user_id: str) -> bool:
         print(f"Error checking user validity: {e}")
         return False  # or raise an exception based on your error handling strategy
 
+@app.post("/mint-nft/")
+async def mint_nft(cid: str, user_address: str):
+    # Ensure Ethereum address is valid
+    if not web3.is_address(user_address):
+        raise HTTPException(status_code=400, detail="Invalid Ethereum address")
 
+    # Token URI (IPFS URL)
+    token_uri = f"ipfs://{cid}"
+
+    # Create a transaction
+    nonce = web3.eth.get_transaction_count(WALLET_ADDRESS)
+    # Prepare the transaction
+    txn = contract.functions.mintNFT(user_address, token_uri).build_transaction({
+        'from': WALLET_ADDRESS,  # The address the transaction is sent from
+        'chainId': 11155111,  # Replace with the correct chain ID
+        'gas': 2000000,
+        'gasPrice': web3.to_wei('50', 'gwei'),
+        'nonce': nonce,
+    })
+
+
+    # Sign the transaction
+    signed_txn = web3.eth.account.sign_transaction(txn, private_key=WALLET_PRIVATE_KEY)
+
+    # Send the transaction
+    txn_hash = web3.eth.send_raw_transaction(signed_txn.rawTransaction)
+
+    # # Wait for transaction receipt (optional)
+    # receipt = web3.eth.wait_for_transaction_receipt(txn_hash)
+    print(txn_hash)
+
+    return {"transaction_hash": txn_hash, "status": "NFT Minted"}
 
 if __name__ == "__main__":
     import uvicorn

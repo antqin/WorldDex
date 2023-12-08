@@ -6,8 +6,9 @@
 //
 
 struct Constants {
-    static let baseURL = "http://10.31.68.30:8000"
-    static let inferenceURL = "http://54.69.7.221:5001"
+    static let baseURL = "http://52.249.222.215:8000"
+    static let inferenceURL = "http://104.42.251.202:5000"
+    static let conversationURL = "http://104.42.251.202:5001"
     struct Endpoints {
         static let register = "/registerUser"
         static let login = "/login"
@@ -19,7 +20,9 @@ struct Constants {
         static let userData = "/userData"
     }
     struct inferenceEndpoints {
-        static let respond = "/respond"
         static let predict = "/predict"
+    }
+    struct responseEndpoints {
+        static let respond = "/respond"
     }
 }

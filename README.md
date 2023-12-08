@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://github.com/antqin/WorldDex/assets/91863950/c2f2cb62-05e2-4753-a3d1-1014ca397860" alt="logo" width="300">
+  <img src="https://github.com/antqin/WorldDex/assets/91863950/612fa3b3-705d-404e-8124-f38f731fb8ca" alt="logo" width="300">
 </p>
 
 ## Inspiration

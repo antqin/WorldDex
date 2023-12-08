@@ -20,7 +20,7 @@ struct ContentView: View {
     @State private var currentPage: Page = .camera
 
     var body: some View {
-        VStack {
+        VStack(spacing: currentPage == .camera ? 10 : 0) {
             // Main content area
             switch currentPage {
             case .pokedex:
