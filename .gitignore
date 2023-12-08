@@ -33,4 +33,4 @@ build/
 *~
 .*.swp
 *.bak
-
+*.env

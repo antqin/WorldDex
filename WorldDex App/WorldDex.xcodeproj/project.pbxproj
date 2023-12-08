@@ -181,6 +181,7 @@
 				BB0313B32AEC7DBA005D3715 /* Sources */,
 				BB0313B42AEC7DBA005D3715 /* Frameworks */,
 				BB0313B52AEC7DBA005D3715 /* Resources */,
+				2928702966612635A00D5038 /* [CP] Embed Pods Frameworks */,
 			);
 			buildRules = (
 			);
@@ -219,7 +220,7 @@
 			);
 			mainGroup = BB0313AE2AEC7DBA005D3715;
 			packageReferences = (
-				BB0313F32AECF6DF005D3715 /* XCRemoteSwiftPackageReference "SwiftyGif" */,
+				BB0313F32AECF6DF005D3715 /* XCRemoteSwiftPackageReference "SwiftyGif.git" */,
 			);
 			productRefGroup = BB0313B82AEC7DBA005D3715 /* Products */;
 			projectDirPath = "";
@@ -246,6 +247,23 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXShellScriptBuildPhase section */
+		2928702966612635A00D5038 /* [CP] Embed Pods Frameworks */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-WorldDex/Pods-WorldDex-frameworks-${CONFIGURATION}-input-files.xcfilelist",
+			);
+			name = "[CP] Embed Pods Frameworks";
+			outputFileListPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-WorldDex/Pods-WorldDex-frameworks-${CONFIGURATION}-output-files.xcfilelist",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-WorldDex/Pods-WorldDex-frameworks.sh\"\n";
+			showEnvVarsInLog = 0;
+		};
 		E6CD95CD7435DE829B647F49 /* [CP] Check Pods Manifest.lock */ = {
 			isa = PBXShellScriptBuildPhase;
 			buildActionMask = 2147483647;
@@ -435,7 +453,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "\"WorldDex/Preview Content\"";
-				DEVELOPMENT_TEAM = 69G7HE4MM9;
+				DEVELOPMENT_TEAM = 5L2TJ5BA64;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = WorldDex/Info.plist;
@@ -459,7 +477,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "AnthonyQin-WorldDex";
+				PRODUCT_BUNDLE_IDENTIFIER = jaiden;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
@@ -476,7 +494,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "\"WorldDex/Preview Content\"";
-				DEVELOPMENT_TEAM = 69G7HE4MM9;
+				DEVELOPMENT_TEAM = 5L2TJ5BA64;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = WorldDex/Info.plist;
@@ -500,7 +518,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "AnthonyQin-WorldDex";
+				PRODUCT_BUNDLE_IDENTIFIER = jaiden;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
@@ -532,7 +550,7 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
-		BB0313F32AECF6DF005D3715 /* XCRemoteSwiftPackageReference "SwiftyGif" */ = {
+		BB0313F32AECF6DF005D3715 /* XCRemoteSwiftPackageReference "SwiftyGif.git" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/kirualex/SwiftyGif.git";
 			requirement = {
@@ -545,7 +563,7 @@
 /* Begin XCSwiftPackageProductDependency section */
 		BB0313F42AECF6DF005D3715 /* SwiftyGif */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = BB0313F32AECF6DF005D3715 /* XCRemoteSwiftPackageReference "SwiftyGif" */;
+			package = BB0313F32AECF6DF005D3715 /* XCRemoteSwiftPackageReference "SwiftyGif.git" */;
 			productName = SwiftyGif;
 		};
 /* End XCSwiftPackageProductDependency section */
