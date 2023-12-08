@@ -7,7 +7,7 @@ import elevenlabs
 import time
 from flask import Flask, request, Response, session, stream_with_context, jsonify
 from flask_session import Session
-from elevenlabs import set_api_key, generate, stream
+from elevenlabs import set_api_key, stream
 from dotenv import load_dotenv
 
 app = Flask(__name__)
@@ -23,53 +23,68 @@ app.config['SECRET_KEY'] = os.urandom(24)
 app.config['SESSION_TYPE'] = 'filesystem'
 Session(app)
 
-def _call_openai(messages, function_info=None, max_retries=1, wait_time=1):
-        """
-        Communicate with the OpenAI API to get a response.
+def send_request(conversation, language: str, words: str) -> None:
+    """
+    From Jason.
+    """
+    if (words == "" or words == None or not any(c.isalpha() for c in words)):
+        print("No words")
+        return
 
-        Parameters:
-        - messages: List of message dictionaries to send.
-        - function_info: Optional dictionary containing function details.
-        - max_retries: Number of times to retry in case of a JSONDecodeError.
-        - wait_time: Time in seconds to wait between retries.
-        - examples: List of example dictionaries.
+    conversation.append({"role": "user", "content": words})
+    gen_response()
 
-        Returns:
-        - The response message from OpenAI API.
-        """
+def gen_response() -> None:
+    """
+    Generates response and audio from a string of text.
 
-        functions = [function_info] if function_info else []          
+    Args:
+        words: A string containing the text to be converted to audio.
 
-        retries = 0
-        while retries < max_retries:
-            try:
-                if functions:
-                    response = client.chat.completions.create(
-                        model="gpt-4",
-                        messages=messages,
-                        functions=functions,
-                        temperature=0
-                    )
-                else:
-                    response = client.chat.completions.create(
-                        model="gpt-4",
-                        messages=messages,
-                        temperature=0
-                    )
+    Returns:
+        None.
 
-                response_message = response["choices"][0]["message"]
-                return response_message
-            except json.JSONDecodeError:
-                retries += 1
-                time.sleep(wait_time)
+    Raises:
+        openai.error.OpenAIError: If there is an error with the OpenAI API request.
+    """
+    print("Streaming audio...")
+    audio_stream = elevenlabs.generate(
+        text=get_gpt_stream(), 
+        voice="Daniel", 
+        stream=True
+    )
+    
+    elevenlabs.stream(audio_stream)
 
-        raise Exception("Maximum retries reached. API issues.")
+def get_gpt_stream(conversation):
+    """
+    Returns a stream of GPT-3 responses. Is a generator function.
+    """
 
-def elevenlabs_tts_stream(text, voice='Liam'):
-    if len(text) > 2000:
-        return text[:2000]
-    audio_stream = generate(text, voice=voice, stream=True)
-    return audio_stream
+    completion = client.chat.completions.create(
+        model="gpt-4-1106-preview",
+        messages=conversation,
+        stream=True,
+    )
+    responseSoFar = ""
+
+    streamChunk = ""
+    punctuation = ".?!,"
+    for response in completion:
+        newChunk = response.choices[0].delta.content
+        if newChunk:
+            print(f"newChunk: {newChunk}")
+
+            responseSoFar += newChunk
+            streamChunk += newChunk
+
+            if any(c in punctuation for c in newChunk):
+                print("yielding streamChunk: ", streamChunk)
+                yield streamChunk
+                streamChunk = ""
+
+    conversation.append({"role": "assistant", "content": responseSoFar})
+    print(conversation)
 
 @app.route('/respond', methods=['POST'])
 def respond():
@@ -143,14 +158,16 @@ def respond():
         "role": "user",
         "content": response_text
     })
-    
-    openai_response = _call_openai(messages)
 
     # Save updated messages to session
     session['messages'] = messages
     session['subject_name'] = subject_name
 
-    audio_stream = generate(openai_response['content'], voice='Liam', stream=True)
+    audio_stream = elevenlabs.generate(
+        text=get_gpt_stream(session['messages']), 
+        voice="Liam",
+        stream=True 
+    )
 
     def generate_audio():
         for chunk in audio_stream:
