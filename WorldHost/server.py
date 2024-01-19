@@ -10,7 +10,7 @@ from httpx import AsyncClient, TimeoutException
 from parse_public import eth_address_to_pub_key
 from ecies import encrypt, decrypt
 from io import BytesIO
-from azure.storage.blob import BlobServiceClient, ContainerClient
+from azure.storage.blob import BlobServiceClient, ContainerClient, generate_blob_sas, BlobSasPermissions
 from azure.data.tables import TableServiceClient, TableEntity
 import threading
 from typing import List
@@ -256,24 +256,79 @@ async def get_user_images(user_id: str):
 
 @app.get("/getUserImageUrls")
 async def get_user_image_urls(user_id: str):
-    try:
+    # try:
         filter_query = f"PartitionKey eq '{user_id}'"
         queried_entities = table_client.query_entities(filter_query)
 
-        result = []
-        for entity in queried_entities:
-            image_info = {
-                "image_id": entity['RowKey'],
-                "user_id": entity['PartitionKey'],
-                "cropped_image_url": entity.get('CroppedImageBlobURL', ''),
-                "image_url": entity.get('ImageBlobURL', '')
-            }
-            result.append(image_info)
+        processed_entries = convert_queries_to_entries(queried_entities)
 
-        return {"imageUrls": result}
+        return {"images": processed_entries}
 
-    except Exception as e:
+    # except Exception as e:
+    #     raise HTTPException(status_code=500, detail="Internal Server Error")
+      
+@app.get("/excludeUserImageUrls")
+async def exclude_user_images_urls(user_id: str, page: int = 1):
+  try:
+      start_index = (page - 1) * ITEMS_PER_PAGE
+      end_index = start_index + ITEMS_PER_PAGE
+      filter_query = f"PartitionKey ne '{user_id}'"
+      queried_entities = table_client.query_entities(filter_query)
+      
+      processed_entries = convert_queries_to_entries(queried_entities)
+      
+      return {"images": processed_entries}
+  except Exception as e:
         raise HTTPException(status_code=500, detail="Internal Server Error")
+      
+def create_service_sas_blob(blob_url: str, account_key: str):
+    # Parse the URL to get blob container and name
+    parsed_url = urlparse(blob_url)
+    blob_path = parsed_url.path.lstrip('/')  # Remove leading '/'
+    container_name, blob_name = blob_path.split('/', 1)
+
+    # Create a SAS token valid for one day
+    start_time = datetime.datetime.now(datetime.timezone.utc)
+    expiry_time = start_time + datetime.timedelta(days=1)
+
+    sas_token = generate_blob_sas(
+        account_name=account_name,
+        container_name=container_name,
+        blob_name=blob_name,
+        account_key=account_key,
+        permission=BlobSasPermissions(read=True),
+        expiry=expiry_time,
+        start=start_time
+    )
+
+    return f"{blob_url}?{sas_token}"
+
+def convert_queries_to_entries(queries):
+    result = []
+    for entity in queries:
+        cropped_image_blob_url = entity.get('CroppedImageBlobURL', '')
+        image_blob_url = entity.get('ImageBlobURL', '')
+
+        # Generate SAS URLs
+        if cropped_image_blob_url:
+            cropped_image_blob_url = create_service_sas_blob(cropped_image_blob_url, account_key)
+        if image_blob_url:
+            image_blob_url = create_service_sas_blob(image_blob_url, account_key)
+
+        image_info = {
+            "image_id": entity['RowKey'],
+            "user_id": entity['PartitionKey'],
+            "ipfs_cid": entity.get('IPFSCid', ''),
+            "date_added": entity.get('DateAdded', ''),
+            "location_taken": entity.get('LocationTaken', ''),
+            "details": entity.get('Details', ''),
+            "probability": entity.get('Probability', ''),
+            "image_classification": entity.get('ImageClassification', ''),
+            "cropped_image_url": cropped_image_blob_url,
+            "image_url": image_blob_url
+        }
+        result.append(image_info)
+    return result
 
 @app.get("/excludeUserImages")
 async def exclude_user_images(user_id: str, page: int = 1):
@@ -374,6 +429,7 @@ async def upload(
         
     # Convert base64 images back to bytes for decentralized upload
     cropped_image_content = base64.b64decode(cropped_image_base64)
+    image_content = base64.b64decode(image_base64)
     decentralized_upload_successful = False
     metadata_cid = None
     metadata_url = ""
@@ -420,8 +476,8 @@ async def upload(
     segment_start = time.time()
     # Call to centralized upload function
     centralized_upload_response = await centralized_upload(
-        image_base64=image_base64,
-        cropped_image_base64=cropped_image_base64,
+        image=image_content,
+        cropped_image=cropped_image_content,
         user_id=user_id,
         image_id=image_id,
         location_taken=location_taken,
@@ -475,15 +531,11 @@ async def upload_metadata_to_nft_storage(client, metadata, image_cid):
 
 # New endpoint for centralized storage upload
 @app.post("/centralized_upload/")
-async def centralized_upload(image_base64: str = Form(...), cropped_image_base64: str = Form(...), user_id: str = Form(...), image_id: str = Form(...), location_taken: str = Form(...), user_address: str = Form(...), details: str = Form(...), probability: str = Form(...), ipfs_cid: str = Form(...), image_classification: str = Form(...)):
+async def centralized_upload(image: str = Form(...), cropped_image: str = Form(...), user_id: str = Form(...), image_id: str = Form(...), location_taken: str = Form(...), user_address: str = Form(...), details: str = Form(...), probability: str = Form(...), ipfs_cid: str = Form(...), image_classification: str = Form(...)):
     try:
-        # Convert base64 image to bytes
-        image_data = base64.b64decode(image_base64)
-        cropped_image_data = base64.b64decode(cropped_image_base64)
-
         # Upload images to blob storage
-        image_blob_url = upload_image_to_blob(blob_storage_name, f"{image_id}.png", BytesIO(image_data))
-        cropped_image_blob_url = upload_image_to_blob(blob_storage_name, f"{image_id}_cropped.png", BytesIO(cropped_image_data))
+        image_blob_url = upload_image_to_blob(blob_storage_name, f"{image_id}.png", BytesIO(image))
+        cropped_image_blob_url = upload_image_to_blob(blob_storage_name, f"{image_id}_cropped.png", BytesIO(cropped_image))
 
         # Create a table entry
         create_table_entry(user_id, image_id, location_taken, user_address, details, probability, image_blob_url, cropped_image_blob_url, ipfs_cid, image_classification)
