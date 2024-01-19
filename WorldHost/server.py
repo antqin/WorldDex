@@ -6,7 +6,7 @@ from cryptography.fernet import Fernet
 import base64
 import json
 import os
-from httpx import AsyncClient
+from httpx import AsyncClient, TimeoutException
 from parse_public import eth_address_to_pub_key
 from ecies import encrypt, decrypt
 from io import BytesIO
@@ -18,6 +18,10 @@ from urllib.parse import urlparse
 import hashlib
 from dotenv import load_dotenv
 import datetime
+import time
+import asyncio
+from starlette.concurrency import run_in_threadpool
+import pytz
 
 lock = threading.Lock()
 
@@ -25,7 +29,7 @@ load_dotenv()
 
 app = FastAPI()
 
-ITEMS_PER_PAGE = 1000  # Define how many items you want per page
+ITEMS_PER_PAGE = 20  # Define how many items you want per page
 
 # Set your NFT.storage API key in environment variable
 nft_storage_api_key = os.environ.get('NFT_STORAGE_API_KEY')
@@ -35,7 +39,8 @@ etherscan_api_key = os.environ.get('ETHERSCAN_API_KEY')
 web3provider = os.environ.get('WEB3_PROVIDER')
 
 # Azure storage account details
-account_name = "worlddexstorage"
+account_name = "worlddexstorage2"
+blob_storage_name = "dex-storage"
 account_key = os.environ.get("BLOB_ACCOUNT_KEY")
 connection_string = f"DefaultEndpointsProtocol=https;AccountName={account_name};AccountKey={account_key};EndpointSuffix=core.windows.net"
 
@@ -69,23 +74,23 @@ WALLET_ADDRESS = os.getenv("WALLET_ADDRESS")
 
 @app.get("/userData")
 async def user_data(username: str):
-    try:
+    # try:
         # Query for the specific user
-        filter_query = f"PartitionKey eq '{username}' and RowKey eq 'userinfo'"
-        user_entities = list(users_table_client.query_entities(filter_query))
+    filter_query = f"PartitionKey eq '{username}' and RowKey eq 'userinfo'"
+    user_entities = list(users_table_client.query_entities(filter_query))
 
-        if not user_entities:
-            raise HTTPException(status_code=404, detail="User not found")
+    if not user_entities:
+        raise HTTPException(status_code=404, detail="User not found")
 
-        user_entity = user_entities[0]
+    user_entity = user_entities[0]
 
-        # Assuming 'Email' and 'EthereumAddress' are the field names in your table
-        email = user_entity.get('Email', 'No email provided')
-        ethereum_address = user_entity.get('EthereumAddress', 'No Ethereum address provided')
+    # Assuming 'Email' and 'EthereumAddress' are the field names in your table
+    email = user_entity.get('Email', 'No email provided')
+    ethereum_address = user_entity.get('EthereumAddress', 'No Ethereum address provided')
 
-        return {"email": email, "ethereum_address": ethereum_address}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    return {"email": email, "ethereum_address": ethereum_address}
+# except Exception as e:
+    #     raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/registerUser")
 async def register_user(username: str, password: str, email: str, ethereum_address: str = None):
@@ -123,29 +128,21 @@ async def register_user(username: str, password: str, email: str, ethereum_addre
       
 @app.post("/login")
 async def login(username: str = Form(...), password: str = Form(...)):
-    try:
-        # Check if user exists
-        filter_query = f"PartitionKey eq '{username}' and RowKey eq 'userinfo'"
-        user_entities = list(users_table_client.query_entities(filter_query))
+    filter_query = f"PartitionKey eq '{username}' and RowKey eq 'userinfo'"
+    user_entities = list(users_table_client.query_entities(filter_query))
 
-        if not user_entities:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, 
-                                detail="Invalid username or password")
+    if not user_entities:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, 
+                            detail="Invalid username or password")
 
-        user_entity = user_entities[0]
-        hashed_password = hash_password(password)
+    user_entity = user_entities[0]
+    hashed_password = hash_password(password)
 
-        if user_entity['Password'] == hashed_password:
-            return {"status": "success", "message": "Login successful"}
-        else:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, 
-                                detail="Invalid username or password")
-    except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, 
-                            detail=str(e))
-
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    if user_entity['Password'] == hashed_password:
+        return {"status": "success", "message": "Login successful"}
+    else:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, 
+                            detail="Invalid username or password")
       
 @app.get("/getAllUsernames")
 async def get_all_usernames():
@@ -162,137 +159,197 @@ async def get_all_usernames():
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.get("/getSpecificImage")
-async def get_image(image_id: str):
-    # try:
-        # Query the table to find the entity with the given row_key
-        filter_query = f"RowKey eq '{image_id}'"
-        entities = list(table_client.query_entities(filter_query))
+async def fetch_and_process_blob(blob_service_client, entity, image_key, max_retries=3, timeout=2):
+    start_blob_fetch_time = time.time()  # Start timing for blob fetch
+    # print(f"[{image_key}] Starting to fetch and process.")
 
-        if not entities:
-            raise HTTPException(status_code=404, detail="Image not found")
+    blob_url = entity.get(image_key)
+    container_name, blob_name = url_to_blob(blob_url)
+    # print(f"[{image_key}] Blob URL: {blob_url}")
 
-        # Assuming the first matching entity contains the image URL
-        blob_url = entities[0].get('ImageBlobURL')
+    blob_client = blob_service_client.get_blob_client(container=container_name, blob=blob_name)
+    # print(f"[{image_key}] Blob client initialized for container: {container_name}, blob: {blob_name}")
 
-        # Create a blob client using the blob's URL
-        container_name, blob_name = url_to_blob(blob_url)  # Assuming you have this function defined
-        blob_client = blob_service_client.get_blob_client(container=container_name, blob=blob_name)
+    # Retry mechanism
+    retries = 0
+    while retries < max_retries:
+        try:
+            download_start_time = time.time()
+            download_stream = await asyncio.wait_for(
+                run_in_threadpool(blob_client.download_blob), timeout=timeout)
+            download_duration = time.time() - download_start_time
+            # print(f"[{image_key}] Blob download initiated in {download_duration:.2f} seconds on attempt {retries+1}")
 
-        # Download the blob contents
-        download_stream = blob_client.download_blob()
-        image_bytes = download_stream.readall()
+            # Read all bytes from the blob
+            read_start_time = time.time()
+            image_bytes = await run_in_threadpool(download_stream.readall)
+            read_duration = time.time() - read_start_time
+            # print(f"[{image_key}] Blob read completed in {read_duration:.2f} seconds")
 
-        # Convert bytes to base64 encoded string
-        base64_encoded = base64.b64encode(image_bytes).decode('utf-8')
+            # Operation successful, break out of the loop
+            break
 
-        return {"image_data": base64_encoded}
-    # except Exception as e:
-    #     raise HTTPException(status_code=500, detail=f"Error retrieving image: {str(e)}")
+        except asyncio.TimeoutError:
+            retries += 1
+            # print(f"[{image_key}] Timeout after {timeout} seconds. Retry {retries}/{max_retries}")
+
+            if retries >= max_retries:
+                raise
+
+    blob_fetch_duration = time.time() - start_blob_fetch_time
+    # print(f"[{image_key}] Total time to fetch and process: {blob_fetch_duration:.2f} seconds")
+
+    return entity, base64.b64encode(image_bytes).decode('utf-8'), image_key
 
 
 @app.get("/getUserImages")
 async def get_user_images(user_id: str):
     try:
-        # Query to retrieve images belonging to user_id
+        start_time = time.time()
+
         filter_query = f"PartitionKey eq '{user_id}'"
         queried_entities = table_client.query_entities(filter_query)
 
-        # Fetching Images
+        tasks = []
+        for entity in queried_entities:
+            # Schedule blob fetches for each image type to run in parallel
+            tasks.append(fetch_and_process_blob(blob_service_client, entity, 'CroppedImageBlobURL'))
+            tasks.append(fetch_and_process_blob(blob_service_client, entity, 'ImageBlobURL'))
+
+        # Run the tasks in parallel and wait for all of them to complete
+        blob_results = await asyncio.gather(*tasks)
+
+        # Process the results
+        result = []
+        for entity, blob_data, image_key in blob_results:
+            # Initialize the dictionary if it's the first time we're seeing this entity
+            if not any(res['image_id'] == entity['RowKey'] for res in result):
+                image_info = {
+                    "image_id": entity['RowKey'],
+                    "user_id": entity['PartitionKey'],
+                    "ipfs_cid": entity.get('IPFSCid', ''),
+                    "date_added": entity.get('DateAdded', ''),
+                    "location_taken": entity.get('LocationTaken', ''),
+                    "details": entity.get('Details', ''),
+                    "probability": entity.get('Probability', ''),
+                    "image_classification": entity.get('ImageClassification', ''),
+                    "cropped_image": "",
+                    "image": ""
+                }
+                result.append(image_info)
+            else:
+                # Find the existing entry
+                image_info = next(res for res in result if res['image_id'] == entity['RowKey'])
+
+            # Add the image data to the correct key
+            if image_key == 'CroppedImageBlobURL':
+                image_info['cropped_image'] = blob_data
+            else:
+                image_info['image'] = blob_data
+
+        # print("Total processing time: {:.2f} seconds".format(time.time() - start_time))
+        return {"images": result}
+
+    except Exception as e:
+        # print(f"Error retrieving data: {e}")
+        raise HTTPException(status_code=500, detail="Internal Server Error")
+
+@app.get("/getUserImageUrls")
+async def get_user_image_urls(user_id: str):
+    try:
+        filter_query = f"PartitionKey eq '{user_id}'"
+        queried_entities = table_client.query_entities(filter_query)
+
         result = []
         for entity in queried_entities:
             image_info = {
                 "image_id": entity['RowKey'],
                 "user_id": entity['PartitionKey'],
-                "ipfs_cid": entity.get('IPFSCid', ''),
-                "date_added": entity.get('DateAdded', ''),
-                "location_taken": entity.get('LocationTaken', ''),
-                "cropped_image": "",
-                "image": "",  # Placeholder for base64 encoded image
-                "details": entity.get('Details', ''),
-                "probability": entity.get('Probability', ''),
-                "image_classification": entity.get('ImageClassification', '')
+                "cropped_image_url": entity.get('CroppedImageBlobURL', ''),
+                "image_url": entity.get('ImageBlobURL', '')
             }
-
-            # Fetch and encode the image from the Blob URL
-            cropped_blob_url = entity.get('CroppedImageBlobURL')
-            container_name, blob_name = url_to_blob(cropped_blob_url)  # Assuming you have this function defined
-            blob_client = blob_service_client.get_blob_client(container=container_name, blob=blob_name)
-            download_stream = blob_client.download_blob()
-            image_bytes = download_stream.readall()
-            image_info['cropped_image'] = base64.b64encode(image_bytes).decode('utf-8')
-            
-            normal_blob_url = entity.get('ImageBlobURL')
-            container_name, blob_name = url_to_blob(normal_blob_url)  # Assuming you have this function defined
-            blob_client = blob_service_client.get_blob_client(container=container_name, blob=blob_name)
-            download_stream = blob_client.download_blob()
-            image_bytes = download_stream.readall()
-            image_info['image'] = base64.b64encode(image_bytes).decode('utf-8')
-
             result.append(image_info)
 
-        return {"images": result}
+        return {"imageUrls": result}
 
     except Exception as e:
-        print(f"Error retrieving data: {e}")
         raise HTTPException(status_code=500, detail="Internal Server Error")
-
-    return {"images": result}
-
 
 @app.get("/excludeUserImages")
 async def exclude_user_images(user_id: str, page: int = 1):
     try:
-      # Calculate the range of items for the requested page
-      start_index = (page - 1) * ITEMS_PER_PAGE
-      end_index = start_index + ITEMS_PER_PAGE
+        start_time = time.time()
+        # print("Start processing excludeUserImages")
 
-      # Create a TableClient
-      # Query to retrieve images not belonging to user_id
-      filter_query = f"PartitionKey ne '{user_id}'"
-      queried_entities = table_client.query_entities(filter_query)
+        # Calculate the range of items for the requested page
+        start_index = (page - 1) * ITEMS_PER_PAGE
+        end_index = start_index + ITEMS_PER_PAGE
 
-      # Implementing Pagination and Image Fetching
-      result = []
-      for i, entity in enumerate(queried_entities):
-          if start_index <= i < end_index:
-              # Fetch and encode the image
-              image_info = {
-                "image_id": entity['RowKey'],
-                "user_id": entity['PartitionKey'],
-                "location_taken": entity.get('LocationTaken', ''),
-                "user_address": entity.get('UserAddress', ''),
-                "details": entity.get('Details', ''),
-                "probability": entity.get('Probability', ''),
-                "ipfs_cid": entity.get('IPFSCid', ''),
-                "image_classification": entity.get('ImageClassification', ''),
-                "date_added": entity.get('DateAdded', ''),
-                "image": "",  # Placeholder for base64 encoded image
-              }
-              
-              cropped_blob_url = entity.get('CroppedImageBlobURL')
-              container_name, blob_name = url_to_blob(cropped_blob_url)  # Assuming you have this function defined
-              blob_client = blob_service_client.get_blob_client(container=container_name, blob=blob_name)
-              download_stream = blob_client.download_blob()
-              image_bytes = download_stream.readall()
-              image_info['cropped_image'] = base64.b64encode(image_bytes).decode('utf-8')
-              
-              normal_blob_url = entity.get('ImageBlobURL')
-              container_name, blob_name = url_to_blob(normal_blob_url)  # Assuming you have this function defined
-              blob_client = blob_service_client.get_blob_client(container=container_name, blob=blob_name)
-              download_stream = blob_client.download_blob()
-              image_bytes = download_stream.readall()
-              image_info['image'] = base64.b64encode(image_bytes).decode('utf-8')
+        # Query to retrieve images not belonging to user_id
+        query_start = time.time()
+        filter_query = f"PartitionKey ne '{user_id}'"
+        queried_entities = table_client.query_entities(filter_query)
+        query_end = time.time()
+        # print(f"Query completed in {query_end - query_start} seconds")
 
-              result.append(image_info)
-          elif i >= end_index:
-              break
+        tasks = []
+        entity_count = 0
+        for i, entity in enumerate(queried_entities):
+            if start_index <= i < end_index:
+                entity_count += 1
+                # Schedule both blob fetches for each image to run in parallel
+                tasks.append(fetch_and_process_blob(blob_service_client, entity, 'CroppedImageBlobURL'))
+                tasks.append(fetch_and_process_blob(blob_service_client, entity, 'ImageBlobURL'))
+            elif i >= end_index:
+                break
 
-      return {"images": result}
+        # Checking if we have entities to process
+        if entity_count == 0:
+            # print("No entities found for the given page.")
+            return {"images": []}
+
+        # Run the tasks in parallel and wait for all of them to complete
+        fetch_start = time.time()
+        blob_results = await asyncio.gather(*tasks)
+        fetch_end = time.time()
+        # print(f"Blob fetch and processing completed in {fetch_end - fetch_start} seconds for {entity_count} entities")
+
+        # Process the results
+        result = {}
+        for entity, blob_data, image_key in blob_results:
+            entity_key = entity['RowKey']
+            if entity_key not in result:
+                result[entity_key] = {
+                    "image_id": entity['RowKey'],
+                    "user_id": entity['PartitionKey'],
+                    "location_taken": entity.get('LocationTaken', ''),
+                    "user_address": entity.get('UserAddress', ''),
+                    "details": entity.get('Details', ''),
+                    "probability": entity.get('Probability', ''),
+                    "ipfs_cid": entity.get('IPFSCid', ''),
+                    "image_classification": entity.get('ImageClassification', ''),
+                    "date_added": entity.get('DateAdded', ''),
+                    "cropped_image": "",
+                    "image": ""
+                }
+            
+            if image_key == 'CroppedImageBlobURL':
+                result[entity_key]['cropped_image'] = blob_data
+            else:
+                result[entity_key]['image'] = blob_data
+
+        # Convert the results dictionary back to a list
+        final_results = list(result.values())
+
+        total_time = time.time() - start_time
+        # print(f"Total processing time for excludeUserImages: {total_time} seconds")
+
+        return {"images": final_results}
 
     except Exception as e:
-        print(f"Error retrieving data: {e}")
+        # print(f"Error retrieving data: {e}")
         raise HTTPException(status_code=500, detail="Internal Server Error")
+
 
 @app.post("/upload")
 async def upload(
@@ -306,8 +363,12 @@ async def upload(
     probability: str = Form(...),
     image_classification: str = Form(...)
 ):
+    start_time = time.time()  # Start timing
+
     if not await is_valid_username(user_id):
       raise HTTPException(status_code=400, detail="Invalid user ID")
+    
+    # print(f"User validation completed in {time.time() - start_time} seconds")
     
     decentralize_storage_bool = decentralize_storage.lower() in ["true", "1", "yes"]
         
@@ -318,15 +379,20 @@ async def upload(
     metadata_url = ""
     
     if decentralize_storage_bool:
-      print(f'eth address: {eth_address}\n')
+      segment_start = time.time()
+      # print(f'eth address: {eth_address}\n')
       public_key, _ = eth_address_to_pub_key(eth_address, etherscan_api_key, "SEP", web3provider)
       public_key_hex = public_key.to_hex()
       encrypted_key, encrypted_image = encrypt_image(cropped_image_content, public_key_hex)
+      # print(f"Encryption and key retrieval completed in {time.time() - segment_start} seconds")
 
+      segment_start = time.time()
       # NFT Storage Upload
       async with AsyncClient() as client:
         image_cid = await upload_to_nft_storage(client, encrypted_image, image_classification)
+        # print(f"NFT storage upload completed in {time.time() - segment_start} seconds")
 
+        segment_start = time.time()
         # Prepare metadata
         metadata = {
             "name": "Encrypted Image",
@@ -337,15 +403,21 @@ async def upload(
 
         metadata_cid = await upload_metadata_to_nft_storage(client, metadata, image_cid)
         metadata_url = f"https://{metadata_cid}.ipfs.nftstorage.link"
-            
+        # print(f"Metadata upload completed in {time.time() - segment_start} seconds")
+
         decentralized_upload_successful = True
         if decentralized_upload_successful:
+            segment_start = time.time()
             mint_response = await mint_nft(metadata_cid, eth_address)
+            # print(f"NFT minting completed in {time.time() - segment_start} seconds")
 
 
     # Centralized upload logic
+    segment_start = time.time()
     image_id = get_next_image_id()  # Get a unique image identifier
+    # print(f"Image ID generation completed in {time.time() - segment_start} seconds")
 
+    segment_start = time.time()
     # Call to centralized upload function
     centralized_upload_response = await centralized_upload(
         image_base64=image_base64,
@@ -359,7 +431,11 @@ async def upload(
         image_classification=image_classification,
         ipfs_cid=metadata_cid or "N/A"
     )
-        
+    # print(f"Centralized upload completed in {time.time() - segment_start} seconds")
+
+    total_time = time.time() - start_time
+    # print(f"Total upload process completed in {total_time} seconds")
+    
     return {
         "decentralized_upload": decentralized_upload_successful,
         "centralized_upload": centralized_upload_response,
@@ -406,8 +482,8 @@ async def centralized_upload(image_base64: str = Form(...), cropped_image_base64
         cropped_image_data = base64.b64decode(cropped_image_base64)
 
         # Upload images to blob storage
-        image_blob_url = upload_image_to_blob("dex-images", f"{image_id}.png", BytesIO(image_data))
-        cropped_image_blob_url = upload_image_to_blob("dex-images", f"{image_id}_cropped.png", BytesIO(cropped_image_data))
+        image_blob_url = upload_image_to_blob(blob_storage_name, f"{image_id}.png", BytesIO(image_data))
+        cropped_image_blob_url = upload_image_to_blob(blob_storage_name, f"{image_id}_cropped.png", BytesIO(cropped_image_data))
 
         # Create a table entry
         create_table_entry(user_id, image_id, location_taken, user_address, details, probability, image_blob_url, cropped_image_blob_url, ipfs_cid, image_classification)
@@ -471,7 +547,8 @@ def create_table_entry(user_id, image_id, location_taken, user_address, details,
     entity['CroppedImageBlobURL'] = cropped_image_blob_url
     entity['IPFSCid'] = ipfs_cid
     entity['ImageClassification'] = image_classification
-    entity['DateAdded'] = datetime.datetime.now().isoformat()
+    pst = pytz.timezone('America/Los_Angeles')
+    entity['DateAdded'] = datetime.datetime.now(pst).isoformat()
     table_client.create_entity(entity)
     
 def url_to_blob(blob_url):
@@ -491,7 +568,7 @@ async def is_valid_username(user_id: str) -> bool:
 
         return len(user_entities) > 0
     except Exception as e:
-        print(f"Error checking user validity: {e}")
+        # print(f"Error checking user validity: {e}")
         return False  # or raise an exception based on your error handling strategy
 
 @app.post("/mint-nft/")
@@ -523,10 +600,10 @@ async def mint_nft(cid: str, user_address: str):
 
     # # Wait for transaction receipt (optional)
     # receipt = web3.eth.wait_for_transaction_receipt(txn_hash)
-    print(txn_hash)
+    # print(txn_hash)
 
     return {"transaction_hash": txn_hash, "status": "NFT Minted"}
 
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+# if __name__ == "__main__":
+#     import uvicorn
+#     uvicorn.run(app, host="0.0.0.0", port=8000, workers = 16)
