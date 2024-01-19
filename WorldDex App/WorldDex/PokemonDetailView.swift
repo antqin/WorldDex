@@ -8,6 +8,7 @@
 import SwiftUI
 import Speech
 import AVFoundation
+import Kingfisher
 
 class AudioPlayerDelegate: NSObject, AVAudioPlayerDelegate {
     var stopPlayingCallback: (() -> Void)?
@@ -56,8 +57,9 @@ struct PokemonDetailView: View {
             ZStack {
                 Color("theme1").edgesIgnoringSafeArea(.all)
 
-                VStack(spacing: 10) { // Reduced spacing
-                    Image(uiImage: pokemonImage(from: pokemon.image))
+                VStack(spacing: 10) {
+                    // Use Kingfisher to load the image from the URL
+                    KFImage(URL(string: pokemon.image_url))
                         .resizable()
                         .scaledToFit()
                         .frame(width: 250, height: 300)

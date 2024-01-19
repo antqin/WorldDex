@@ -14,8 +14,8 @@ struct Constants {
         static let login = "/login"
         static let usernames = "/getAllUsernames"
         static let image = "/getSpecificImage"
-        static let userImages = "/getUserImages"
-        static let excludeUserImages = "/excludeUserImages"
+        static let userImages = "/getUserImageUrls"
+        static let excludeUserImages = "/excludeUserImageUrls"
         static let upload = "/upload"
         static let userData = "/userData"
     }

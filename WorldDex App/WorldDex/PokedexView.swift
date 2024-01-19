@@ -7,6 +7,8 @@
 import SwiftUI
 import Combine
 import SwiftyGif
+import Kingfisher
+
 
 struct PokemonCell: View {
     var pokemon: Pokemon
@@ -14,7 +16,7 @@ struct PokemonCell: View {
     var body: some View {
         NavigationLink(destination: PokemonDetailView(pokemon: pokemon)) {
             VStack {
-                Image(uiImage: pokemonImage(from: pokemon.cropped_image))
+                KFImage(URL(string: pokemon.cropped_image_url))
                     .resizable()
                     .scaledToFit()
                     .cornerRadius(15)
@@ -25,14 +27,7 @@ struct PokemonCell: View {
             .background(Color.gray.opacity(0.2))
             .cornerRadius(15)
         }
-        .shadow(color: Color.black.opacity(0.7), radius: 15, x: 0, y: 0) // Shadow on the frame
-    }
-    
-    func pokemonImage(from base64: String) -> UIImage {
-        guard let data = Data(base64Encoded: base64), let image = UIImage(data: data) else {
-            return UIImage() // or a default image if desired
-        }
-        return image
+        .shadow(color: Color.black.opacity(0.7), radius: 15, x: 0, y: 0)
     }
 }
 
@@ -49,10 +44,11 @@ struct PokedexView: View {
         URLSession.shared.dataTask(with: url) { data, response, error in
             if let data = data {
                 do {
+                    // Assuming the backend returns a structure where the key for the images is "images"
                     let fetchedData = try JSONDecoder().decode([String: [Pokemon]].self, from: data)
                     if let fetchedPokemons = fetchedData["images"] {
                         let sortedPokemons = fetchedPokemons.sorted(by: {
-                            // Assuming `date_taken` is in a suitable format for comparison
+                            // Sorting by `date_added`
                             $0.date_added > $1.date_added
                         })
                         DispatchQueue.main.async {

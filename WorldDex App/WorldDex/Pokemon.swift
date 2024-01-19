@@ -17,8 +17,8 @@ struct Pokemon: Identifiable, Decodable {
     let ipfs_cid: String
     let date_added: String // TIME
     let location_taken: String
-    var cropped_image: String
-    var image: String
+    var cropped_image_url: String
+    var image_url: String
     let details: String // live observations
     let image_classification: String
     let probability: String

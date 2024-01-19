@@ -1,11 +1,5 @@
-//
-//  PokemonPostView.swift
-//  WorldDex
-//
-//  Created by Anthony Qin on 10/27/23.
-//
-
 import SwiftUI
+import Kingfisher
 
 struct PokemonPostView: View {
     let pokemon: Pokemon
@@ -30,11 +24,12 @@ struct PokemonPostView: View {
             
             HStack {
                 Spacer()
-                Image(uiImage: pokemonImage(from: pokemon.image))
+                // Use Kingfisher to load images from URLs
+                KFImage(URL(string: pokemon.image_url))
                     .resizable()
                     .scaledToFit()
                     .frame(height: 200)
-                Image(uiImage: pokemonImage(from: pokemon.cropped_image))
+                KFImage(URL(string: pokemon.cropped_image_url))
                     .resizable()
                     .scaledToFit()
                     .frame(height: 200)
@@ -76,12 +71,5 @@ struct PokemonPostView: View {
         let chance = String(pokemon.probability.prefix(4))
         let item = pokemon.image_classification.split(separator: "_").first ?? ""
         return "\(id) had a \(chance)% chance of capturing this \(item)!"
-    }
-    
-    func pokemonImage(from base64: String) -> UIImage {
-        guard let data = Data(base64Encoded: base64), let image = UIImage(data: data) else {
-            return UIImage() // or a default image if desired
-        }
-        return image
     }
 }
