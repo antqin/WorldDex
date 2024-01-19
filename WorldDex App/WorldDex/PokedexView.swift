@@ -44,30 +44,41 @@ struct PokedexView: View {
         URLSession.shared.dataTask(with: url) { data, response, error in
             if let data = data {
                 do {
-                    // Assuming the backend returns a structure where the key for the images is "images"
                     let fetchedData = try JSONDecoder().decode([String: [Pokemon]].self, from: data)
                     if let fetchedPokemons = fetchedData["images"] {
                         let sortedPokemons = fetchedPokemons.sorted(by: {
-                            // Sorting by `date_added`
                             $0.date_added > $1.date_added
                         })
                         DispatchQueue.main.async {
                             self.pokemonList = sortedPokemons
                             self.isEmpty = false
                             self.isLoading = false
+
+                            // Prefetch images after sorting
+                            self.prefetchImages(pokemons: sortedPokemons)
                         }
                     }
                 } catch {
                     print("Error decoding: \(error)")
-                    self.isLoading = false
-                    self.isEmpty = true
+                    DispatchQueue.main.async {
+                        self.isLoading = false
+                        self.isEmpty = true
+                    }
                 }
             } else if let error = error {
                 print("Error fetching data: \(error)")
-                self.isLoading = false
-                self.isEmpty = true
+                DispatchQueue.main.async {
+                    self.isLoading = false
+                    self.isEmpty = true
+                }
             }
         }.resume()
+    }
+
+    func prefetchImages(pokemons: [Pokemon]) {
+        let urls = pokemons.compactMap { URL(string: $0.image_url) }
+        let prefetcher = ImagePrefetcher(urls: urls)
+        prefetcher.start()
     }
 
 

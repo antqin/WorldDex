@@ -7,6 +7,7 @@
 
 import SwiftUI
 import SwiftyGif
+import Kingfisher
 
 struct SocialPageView: View {
     @State private var friendsPokemons: [Pokemon] = []
@@ -29,19 +30,30 @@ struct SocialPageView: View {
                             self.friendsPokemons = sortedPokemons
                             self.isLoading = false
                             self.isEmpty = false
+                            self.prefetchImages(pokemons: sortedPokemons)
                         }
                     }
                 } catch {
                     print("Error decoding: \(error)")
-                    self.isLoading = false
-                    self.isEmpty = true
+                    DispatchQueue.main.async {
+                        self.isLoading = false
+                        self.isEmpty = true
+                    }
                 }
             } else if let error = error {
                 print("Error fetching data: \(error)")
-                self.isLoading = false
-                self.isEmpty = true
+                DispatchQueue.main.async {
+                    self.isLoading = false
+                    self.isEmpty = true
+                }
             }
         }.resume()
+    }
+
+    func prefetchImages(pokemons: [Pokemon]) {
+        let urls = pokemons.compactMap { URL(string: $0.image_url) }
+        let prefetcher = ImagePrefetcher(urls: urls)
+        prefetcher.start()
     }
 
     
