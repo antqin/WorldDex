@@ -29,8 +29,6 @@ load_dotenv()
 
 app = FastAPI()
 
-ITEMS_PER_PAGE = 20  # Define how many items you want per page
-
 # Set your NFT.storage API key in environment variable
 nft_storage_api_key = os.environ.get('NFT_STORAGE_API_KEY')
 # Set Etherscan API Key
@@ -172,16 +170,19 @@ async def get_user_image_urls(user_id: str):
     #     raise HTTPException(status_code=500, detail="Internal Server Error")
       
 @app.get("/excludeUserImageUrls")
-async def exclude_user_images_urls(user_id: str, page: int = 1):
+async def exclude_user_images_urls(user_id: str, page: int = 1, items_per_page: int = 3):
   try:
-      start_index = (page - 1) * ITEMS_PER_PAGE
-      end_index = start_index + ITEMS_PER_PAGE
+      start_index = (page - 1) * items_per_page
+      end_index = start_index + items_per_page
       filter_query = f"PartitionKey ne '{user_id}'"
       queried_entities = table_client.query_entities(filter_query)
       
       processed_entries = convert_queries_to_entries(queried_entities)
+      sorted_entries = sorted(processed_entries, key=lambda x: x['date_added'], reverse=True)
+
+      paginated_entries = sorted_entries[start_index:end_index]
       
-      return {"images": processed_entries}
+      return {"images": paginated_entries}
   except Exception as e:
         raise HTTPException(status_code=500, detail="Internal Server Error")
       
