@@ -11,7 +11,7 @@ struct ImageResponse: Decodable {
     let imagePaths: [Pokemon]
 }
 
-struct Pokemon: Identifiable, Decodable {
+struct Pokemon: Identifiable, Decodable, Equatable {
     let image_id: String // ITEM_ID
     let user_id: String
     let ipfs_cid: String
