@@ -85,7 +85,7 @@ struct PokemonDetailView: View {
                             .foregroundColor(.black)
                     }
                     .foregroundColor(.black)
-                    
+                    Spacer()
                     VStack(alignment: .leading, spacing: 0) {
                         Text("Live Observations:")
                             .font(Font.custom("Avenir", size: UIFont.preferredFont(forTextStyle: .title3).pointSize))
